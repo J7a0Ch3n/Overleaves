@@ -35,6 +35,18 @@
         "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\n# 验证 spec 文件语法（只做语法检查，不实际打包）\nwith open\\('overleaves\\.spec', 'r', encoding='utf-8'\\) as f:\n    src = f\\.read\\(\\)\ncompile\\(src, 'overleaves\\.spec', 'exec'\\)\nprint\\('overleaves\\.spec 语法验证通过'\\)\n\n# 验证 build\\.ps1 存在\nfrom pathlib import Path\nassert Path\\('build\\.ps1'\\)\\.exists\\(\\), 'build\\.ps1 不存在'\nprint\\('build\\.ps1 存在'\\)\n\nassert Path\\('README\\.md'\\)\\.stat\\(\\)\\.st_size > 1000, 'README\\.md 内容过短'\nprint\\('README\\.md 内容验证通过'\\)\nprint\\('Task 10 所有文件验证通过'\\)\n\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^python -c \"import flet as ft; print\\(ft\\.__version__\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0, 'src'\\)\n# 验证模块可正常导入\nfrom gui\\.app import MainView, _flatten_tree\nfrom config\\.settings_manager import SettingsManager\nfrom storage\\.local_storage import LocalStorage\nimport flet as ft\n\n# 验证关键布局结构\nsettings = SettingsManager\\(\\)\nstorage = LocalStorage\\(\\)\nprint\\('模块导入正常'\\)\n\n# 验证 expand 属性可被设置为整数权重\nfrom gui\\.panels\\.file_tree import FileTreePanel\np = FileTreePanel\\(\\)\np\\.expand = 2\nassert p\\.expand == 2\nprint\\('expand 权重设置正常'\\)\n\nprint\\('所有修复验证通过，可运行 python src/main\\.py 测试'\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0, 'src'\\)\nfrom gui\\.panels\\.file_tree import FileTreePanel\nfrom gui\\.panels\\.tex_viewer import TexViewerPanel\nfrom gui\\.panels\\.pdf_viewer import PdfViewerPanel\nfrom gui\\.app import MainView\nfrom gui\\.settings import SettingsPage\nfrom config\\.settings_manager import SettingsManager\nfrom storage\\.local_storage import LocalStorage\n\np = FileTreePanel\\(\\)\np\\.expand = 2\nt = TexViewerPanel\\(\\)\nt\\.expand = 3\npv = PdfViewerPanel\\(\\)\npv\\.expand = 3\nprint\\('所有面板初始化正常，expand 权重设置成功'\\)\nprint\\('请运行 python src/main\\.py 验证 GUI'\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

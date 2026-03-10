@@ -100,32 +100,32 @@ class MainView(ft.View):
             ],
         )
 
-        # 三栏布局
+        # 三栏布局：用显式 Column(expand=True) 作根容器，确保 Row 能获得垂直空间
+        # 面板直接放入 Row（不套 Container），expand=N 才会被 Flutter 正确识别
+        self._file_tree.expand = 2
+        self._tex_viewer.expand = 3
+        self._pdf_viewer.expand = 3
+
         self.controls = [
-            self._progress,
-            ft.Row(
+            ft.Column(
                 controls=[
-                    # 左侧文件树（宽度比 2）
-                    ft.Container(
-                        content=self._file_tree,
-                        expand=2,
-                        border=ft.border.only(right=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                    ),
-                    # 中间 TeX 内容（宽度比 3）
-                    ft.Container(
-                        content=self._tex_viewer,
-                        expand=3,
-                        border=ft.border.only(right=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                    ),
-                    # 右侧 PDF 预览（宽度比 3）
-                    ft.Container(
-                        content=self._pdf_viewer,
-                        expand=3,
+                    self._progress,
+                    ft.Row(
+                        controls=[
+                            self._file_tree,
+                            ft.VerticalDivider(width=1, color=ft.Colors.OUTLINE_VARIANT),
+                            self._tex_viewer,
+                            ft.VerticalDivider(width=1, color=ft.Colors.OUTLINE_VARIANT),
+                            self._pdf_viewer,
+                        ],
+                        expand=True,
+                        spacing=0,
+                        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                     ),
                 ],
                 expand=True,
                 spacing=0,
-            ),
+            )
         ]
 
     # ------------------------------------------------------------------

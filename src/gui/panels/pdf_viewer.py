@@ -98,7 +98,7 @@ class PdfViewerPanel(ft.Column):
                     color=ft.Colors.GREY_500,
                     text_align=ft.TextAlign.CENTER,
                 ),
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 expand=True,
                 padding=20,
             )
