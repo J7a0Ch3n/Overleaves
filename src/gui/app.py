@@ -197,16 +197,18 @@ class OverleavesApp:
     # 拖拽与折叠
     # ------------------------------------------------------------------
 
-    def _on_left_divider_drag(self, e: ft.DragUpdateEvent) -> None:
+    def _on_left_divider_drag(self, e) -> None:
         """拖拽左分隔条：调整左栏宽度，中间栏自动伸缩。"""
-        self._left_width = max(self._MIN_WIDTH, self._left_width + e.delta_x)
+        dx = e.local_delta.x if e.local_delta else 0
+        self._left_width = max(self._MIN_WIDTH, self._left_width + dx)
         self._file_tree.width = self._left_width
         self._page.update()
 
-    def _on_right_divider_drag(self, e: ft.DragUpdateEvent) -> None:
+    def _on_right_divider_drag(self, e) -> None:
         """拖拽右分隔条：调整右栏宽度，中间栏自动伸缩。"""
-        # 向左拖（delta_x < 0）→ 右栏变宽
-        self._right_width = max(self._MIN_WIDTH, self._right_width - e.delta_x)
+        # 向左拖（dx < 0）→ 右栏变宽
+        dx = e.local_delta.x if e.local_delta else 0
+        self._right_width = max(self._MIN_WIDTH, self._right_width - dx)
         self._pdf_viewer.width = self._right_width
         self._page.update()
 
@@ -238,8 +240,10 @@ class OverleavesApp:
         """构建项目菜单条目：创建新项目 + 所有缓存项目列表。"""
         items = [
             ft.PopupMenuItem(
-                text="创建新项目",
-                icon=ft.Icons.ADD,
+                content=ft.Row(
+                    [ft.Icon(ft.Icons.ADD, size=16), ft.Text("创建新项目")],
+                    spacing=8,
+                ),
                 on_click=self._on_create_project,
             ),
             ft.PopupMenuItem(),  # 分隔线
@@ -250,15 +254,17 @@ class OverleavesApp:
         all_ids = list(dict.fromkeys(settings_projects + cached))
         for pid in all_ids:
             name = self._settings.get_project_name(pid)
-            display = f"{name}" if name != pid else pid
+            display = name if name != pid else pid
             # 使用默认参数绑定 pid，避免闭包捕获问题
             def make_handler(project_id):
                 def handler(_):
                     self._on_open_project(project_id)
                 return handler
             items.append(ft.PopupMenuItem(
-                text=display,
-                icon=ft.Icons.FOLDER,
+                content=ft.Row(
+                    [ft.Icon(ft.Icons.FOLDER, size=16), ft.Text(display)],
+                    spacing=8,
+                ),
                 on_click=make_handler(pid),
             ))
         return items
