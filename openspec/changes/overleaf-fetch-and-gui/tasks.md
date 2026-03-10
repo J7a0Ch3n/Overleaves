@@ -12,11 +12,11 @@
 
 ## 3. 本地存储模块（storage/local_storage.py）
 
-- [ ] 3.1 实现 `LocalStorage` 类，初始化时自动创建 `~/.overleaves/projects/` 目录
-- [ ] 3.2 实现 `save_file(project_id, relative_path, content)` 方法，支持 str（UTF-8）和 bytes 两种类型
-- [ ] 3.3 实现 `read_file(project_id, relative_path)` 方法，文件不存在时抛出 `FileNotFoundError`
-- [ ] 3.4 实现 `save_pdf(project_id, pdf_bytes)` 方法，保存到 `output.pdf`，返回绝对路径
-- [ ] 3.5 实现 `list_projects()` 方法，列出所有已缓存项目 ID
+- [x] 3.1 实现 `LocalStorage` 类，初始化时自动创建 `~/.overleaves/projects/` 目录
+- [x] 3.2 实现 `save_file(project_id, relative_path, content)` 方法，支持 str（UTF-8）和 bytes 两种类型
+- [x] 3.3 实现 `read_file(project_id, relative_path)` 方法，文件不存在时抛出 `FileNotFoundError`
+- [x] 3.4 实现 `save_pdf(project_id, pdf_bytes)` 方法，保存到 `output.pdf`，返回绝对路径
+- [x] 3.5 实现 `list_projects()` 方法，列出所有已缓存项目 ID
 
 ## 4. Overleaf HTTP 客户端（overleaf/client.py）
 
