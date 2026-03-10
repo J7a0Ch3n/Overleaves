@@ -228,3 +228,31 @@ class OverleafClient:
 
         logger.info("PDF 已下载到：%s", local_path)
         return local_path
+
+    def upload_file(self, project_id: str, doc_id: str, content: str) -> None:
+        """
+        将修改后的文档内容推送到 Overleaf。
+        使用 POST /project/{project_id}/doc/{doc_id} 更新文档内容。
+        Overleaf 内部以行列表存储文档，发送时按换行符拆分。
+        """
+        csrf = self._extract_csrf_token(project_id)
+        if not csrf:
+            raise OverleafAuthError("无法获取 CSRF token，请检查 Cookie 是否有效")
+
+        url = f"{BASE_URL}/project/{project_id}/doc/{doc_id}"
+        # Overleaf 以行列表格式存储文档内容
+        lines = content.split("\n")
+        payload = {"doc": lines, "source": "editor", "version": 0, "ranges": []}
+        headers = {"X-Csrf-Token": csrf, "Content-Type": "application/json"}
+
+        resp = self._post(url, json=payload, headers=headers, timeout=30)
+
+        if resp.status_code == 403:
+            raise OverleafAuthError("推送被拒绝（403），CSRF token 可能已过期")
+        if resp.status_code == 404:
+            raise OverleafNotFoundError(f"文档不存在（doc_id={doc_id}），无法推送")
+        if resp.status_code not in (200, 204):
+            raise OverleafNetworkError(
+                f"推送失败（HTTP {resp.status_code}）：{resp.text[:200]}"
+            )
+        logger.info("文档推送成功：project=%s doc=%s（%d 行）", project_id, doc_id, len(lines))
