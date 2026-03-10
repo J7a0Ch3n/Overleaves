@@ -1,7 +1,6 @@
 """
 右侧 PDF 预览面板：将 PDF 各页渲染为图片后展示
 """
-import base64
 import logging
 from pathlib import Path
 from typing import Optional
@@ -56,13 +55,12 @@ class PdfViewerPanel(ft.Column):
                 mat = fitz.Matrix(2.0, 2.0)
                 pix = page.get_pixmap(matrix=mat)
                 png_bytes = pix.tobytes("png")
-                b64 = base64.b64encode(png_bytes).decode("utf-8")
 
                 self.controls.append(
                     ft.Container(
                         content=ft.Image(
-                            src_base64=b64,
-                            fit=ft.ImageFit.CONTAIN,
+                            src=pix.tobytes("png"),
+                            fit=ft.BoxFit.CONTAIN,
                             expand=True,
                         ),
                         margin=ft.margin.symmetric(vertical=2),

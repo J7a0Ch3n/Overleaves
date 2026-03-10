@@ -1,7 +1,6 @@
 """
 中间文件查看面板：支持 TeX/文本文件只读展示，以及 PNG/JPG/PDF 图片预览
 """
-import base64
 import logging
 from pathlib import Path
 
@@ -127,11 +126,10 @@ class TexViewerPanel(ft.Column):
         )
 
     def _make_image_view_bytes(self, data: bytes) -> ft.Control:
-        b64 = base64.b64encode(data).decode("utf-8")
         return ft.Container(
             content=ft.Image(
-                src_base64=b64,
-                fit=ft.ImageFit.CONTAIN,
+                src=data,
+                fit=ft.BoxFit.CONTAIN,
                 expand=True,
             ),
             expand=True,
@@ -148,10 +146,10 @@ class TexViewerPanel(ft.Column):
             views = []
             for i in range(len(doc)):
                 pix = doc[i].get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
-                b64 = base64.b64encode(pix.tobytes("png")).decode("utf-8")
+                png_bytes = pix.tobytes("png")
                 views.append(
                     ft.Container(
-                        content=ft.Image(src_base64=b64, fit=ft.ImageFit.CONTAIN, expand=True),
+                        content=ft.Image(src=png_bytes, fit=ft.BoxFit.CONTAIN, expand=True),
                         expand=True,
                         margin=ft.margin.symmetric(vertical=2),
                         padding=4,
