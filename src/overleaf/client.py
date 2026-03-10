@@ -125,7 +125,16 @@ class OverleafClient:
             data = resp.json()
         except Exception as e:
             raise OverleafNetworkError(f"响应解析失败：{e}") from e
-        entities = data.get("entities", [])
+        raw_entities = data.get("entities", [])
+        # 保留 id、path、type 字段（id 用于后续 upload_doc）
+        entities = []
+        for e in raw_entities:
+            entity = {
+                "id": e.get("id", e.get("_id", "")),
+                "path": e.get("path", ""),
+                "type": e.get("type", "doc"),
+            }
+            entities.append(entity)
         logger.info("成功获取项目 %s 文件列表，共 %d 个文件", project_id, len(entities))
         return entities
 
@@ -228,3 +237,38 @@ class OverleafClient:
 
         logger.info("PDF 已下载到：%s", local_path)
         return local_path
+
+    def upload_doc(self, project_id: str, doc_id: str, content: str) -> None:
+        """
+        将文本内容上传到 Overleaf 文档（实验性实现，通过探测接口完成）。
+        content: 文档的完整文本内容（字符串）。
+        成功时返回 None，失败时抛出 OverleafAuthError / OverleafNetworkError。
+        """
+        if not doc_id:
+            raise ValueError("doc_id 不能为空，请确认文件节点包含 id 字段")
+
+        csrf = self._extract_csrf_token(project_id)
+        if not csrf:
+            raise OverleafAuthError("无法获取 CSRF token，请检查 Cookie 是否有效")
+
+        # Overleaf 内部文档以行数组存储，将内容按行拆分
+        lines = content.split("\n")
+        url = f"{BASE_URL}/project/{project_id}/doc/{doc_id}"
+        payload = {
+            "source": lines,
+            "snapshot": "",
+            "revision": 0,
+            "ranges": {},
+        }
+        headers = {"X-Csrf-Token": csrf}
+
+        logger.info("推送文档 doc_id=%s 到项目 %s", doc_id, project_id)
+        resp = self._post(url, json=payload, headers=headers, timeout=30)
+
+        if resp.status_code == 404:
+            raise OverleafNotFoundError(f"文档不存在：doc_id={doc_id}，请确认 ID 正确")
+        if resp.status_code not in (200, 204):
+            raise OverleafNetworkError(
+                f"推送文档失败（HTTP {resp.status_code}）：{resp.text[:200]}"
+            )
+        logger.info("文档 doc_id=%s 推送成功", doc_id)
