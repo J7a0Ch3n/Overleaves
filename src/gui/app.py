@@ -22,22 +22,43 @@ from storage.local_storage import LocalStorage
 logger = logging.getLogger(__name__)
 
 
-def _flatten_tree(nodes: list, prefix: str = "") -> list:
-    """递归展开文件树，返回 [(relative_path, node), ...] 列表。"""
-    result = []
-    for node in nodes:
-        name = node.get("name", "")
-        node_type = node.get("type", "doc")
-        rel_path = name if not prefix else f"{prefix}/{name}"
-        if node_type == "folder":
-            children = (
-                node.get("children", [])
-                or node.get("docs", []) + node.get("fileRefs", []) + node.get("folders", [])
-            )
-            result.extend(_flatten_tree(children, rel_path))
-        else:
-            result.append((rel_path, node))
-    return result
+def _build_tree_from_entities(entities: list) -> list:
+    """
+    将 /entities 返回的扁平列表转换为文件树结构，供 FileTreePanel 显示。
+    entity: {"path": "/folder/file.tex", "type": "doc"|"file"}
+    节点携带 "path" 字段（去掉开头 /），供 _on_file_select 读取本地缓存使用。
+    """
+    root: list = []
+    folders: dict = {}  # folder_path -> children list
+
+    def get_or_create_folder(parts: list) -> list:
+        """递归确保文件夹路径存在，返回该文件夹的 children 列表。"""
+        if not parts:
+            return root
+        key = "/".join(parts)
+        if key not in folders:
+            parent = get_or_create_folder(parts[:-1])
+            node = {"name": parts[-1], "type": "folder", "children": []}
+            parent.append(node)
+            folders[key] = node["children"]
+        return folders[key]
+
+    for entity in entities:
+        raw_path = entity.get("path", "")
+        entity_type = entity.get("type", "doc")
+        # 去掉开头的 /
+        rel_path = raw_path.lstrip("/")
+        parts = rel_path.split("/")
+        name = parts[-1]
+        parent_parts = parts[:-1]
+        parent_children = get_or_create_folder(parent_parts)
+        parent_children.append({
+            "name": name,
+            "type": entity_type,
+            "path": rel_path,  # 完整相对路径，供读取本地缓存
+        })
+
+    return root
 
 
 class OverleavesApp:
@@ -148,16 +169,17 @@ class OverleavesApp:
 
     def _on_file_select(self, node: dict) -> None:
         project_id = self._settings.project_id
-        name = node.get("name", "")
-        if node.get("type", "doc") != "doc":
+        # 优先用 path 字段（完整相对路径），回退到 name
+        rel_path = node.get("path") or node.get("name", "")
+        if node.get("type", "doc") not in ("doc",):
             return
         try:
-            content = self._storage.read_file(project_id, name)
+            content = self._storage.read_file(project_id, rel_path)
             if isinstance(content, bytes):
                 content = content.decode("utf-8", errors="replace")
-            self._tex_viewer.load_file(name, content)
+            self._tex_viewer.load_file(rel_path, content)
         except FileNotFoundError:
-            self._tex_viewer.load_file(name, f"（文件 {name} 暂无本地缓存，请先拉取项目）")
+            self._tex_viewer.load_file(rel_path, f"（文件 {rel_path} 暂无本地缓存，请先拉取项目）")
 
     def _on_fetch(self, _) -> None:
         cookie = self._settings.cookie
@@ -173,13 +195,18 @@ class OverleavesApp:
             try:
                 self._set_loading(True)
                 client = OverleafClient(cookie)
-                root_folder = client.get_file_tree(project_id)
-                for rel_path, node in _flatten_tree(root_folder):
-                    try:
-                        self._storage.save_file(project_id, rel_path, client.download_file(project_id, node))
-                    except Exception as e:
-                        logger.warning("跳过 %s：%s", rel_path, e)
-                self._file_tree.load_tree(root_folder)
+                # 获取文件列表（扁平结构）
+                entities = client.get_entities(project_id)
+                # 批量下载整个项目 ZIP
+                zf = client.download_project_zip(project_id)
+                # 从 ZIP 中提取并保存所有文件
+                for zip_name in zf.namelist():
+                    content = zf.read(zip_name)
+                    self._storage.save_file(project_id, zip_name, content)
+                zf.close()
+                # 构建文件树并更新 UI
+                tree = _build_tree_from_entities(entities)
+                self._file_tree.load_tree(tree)
             except OverleafAuthError as e:
                 self._show_error("认证失败", str(e))
             except OverleafNetworkError as e:

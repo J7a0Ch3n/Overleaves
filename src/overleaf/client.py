@@ -1,11 +1,11 @@
 """
 Overleaf HTTP 客户端：基于 Cookie 的非官方 API 接入
-参考：https://github.com/aloth/olcli
+当前适配新版 Overleaf：使用 /entities 获取文件列表，/download/zip 批量下载
 """
-import json
+import io
 import logging
 import re
-import time
+import zipfile
 from pathlib import Path
 from typing import Union
 
@@ -109,57 +109,43 @@ class OverleafClient:
     # 公开接口
     # ------------------------------------------------------------------
 
-    def get_file_tree(self, project_id: str) -> dict:
+    def get_entities(self, project_id: str) -> list:
         """
-        获取项目文件树。
-        返回 Overleaf rootFolder 结构的嵌套字典列表。
+        获取项目文件列表（扑平结构）。
+        返回：[{"path": "/main.tex", "type": "doc"}, ...]
+        path 以 / 开头，type 为 'doc'（文本）或 'file'（二进制）
         """
-        url = f"{BASE_URL}/project/{project_id}"
-        resp = self._get(url)
-
-        # 从 HTML 中解析 window.data 里的 rootFolder
-        # Overleaf 将项目数据嵌入在 <script> 标签中
-        match = re.search(r"window\.data\s*=\s*(\{.*?\});\s*</script>", resp.text, re.DOTALL)
-        if not match:
-            # 尝试另一种格式
-            match = re.search(r'"rootFolder"\s*:\s*(\[.*?\])\s*[,}]', resp.text, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group(1))
-                except json.JSONDecodeError:
-                    pass
+        url = f"{BASE_URL}/project/{project_id}/entities"
+        resp = self._get(url, headers={"Accept": "application/json"})
+        if resp.status_code != 200:
             raise OverleafNotFoundError(
-                f"无法解析项目 {project_id} 的文件树，可能项目不存在或 Cookie 失效"
+                f"无法获取项目 {project_id} 的文件列表（HTTP {resp.status_code}）"
             )
-
         try:
-            data = json.loads(match.group(1))
-        except json.JSONDecodeError as e:
-            raise OverleafNotFoundError(f"项目数据解析失败：{e}") from e
+            data = resp.json()
+        except Exception as e:
+            raise OverleafNetworkError(f"响应解析失败：{e}") from e
+        entities = data.get("entities", [])
+        logger.info("成功获取项目 %s 文件列表，共 %d 个文件", project_id, len(entities))
+        return entities
 
-        root_folder = data.get("rootFolder", [])
-        logger.info("成功获取项目 %s 文件树", project_id)
-        return root_folder
-
-    def download_file(self, project_id: str, node: dict) -> Union[str, bytes]:
+    def download_project_zip(self, project_id: str) -> zipfile.ZipFile:
         """
-        根据文件节点下载文件内容。
-        - type='doc'（TeX 源码等）：返回 str
-        - type='file'（图片等二进制）：返回 bytes
+        下载整个项目为 ZIP。
+        返回可直接操作的 zipfile.ZipFile 对象。
         """
-        node_type = node.get("type", "doc")
-        node_id = node["_id"]
-
-        if node_type == "doc":
-            url = f"{BASE_URL}/project/{project_id}/doc/{node_id}/raw"
-            resp = self._get(url)
-            logger.debug("下载 doc: %s", node.get("name", node_id))
-            return resp.text
-        else:
-            url = f"{BASE_URL}/project/{project_id}/file/{node_id}"
-            resp = self._get(url)
-            logger.debug("下载 file: %s", node.get("name", node_id))
-            return resp.content
+        url = f"{BASE_URL}/project/{project_id}/download/zip"
+        resp = self._get(url, timeout=120)
+        if resp.status_code != 200:
+            raise OverleafNetworkError(
+                f"下载 ZIP 失败（HTTP {resp.status_code}）"
+            )
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(resp.content))
+        except zipfile.BadZipFile as e:
+            raise OverleafNetworkError(f"ZIP 文件损坏：{e}") from e
+        logger.info("项目 %s ZIP 下载完成，共 %d 个文件", project_id, len(zf.namelist()))
+        return zf
 
     def compile_project(self, project_id: str) -> dict:
         """
