@@ -1,21 +1,24 @@
 """
-设置页面：配置 Overleaf Cookie、项目 ID、LLM 参数
+设置面板：配置 Overleaf Cookie、项目 ID、LLM 参数
+以 AlertDialog 弹窗形式展示，不依赖路由/View 系统。
 """
 import flet as ft
 
 from config.settings_manager import SettingsManager
 
 
-class SettingsPage(ft.View):
+class SettingsPanel:
     """
-    设置页面视图。
-    通过 ft.Page.go("/settings") 进入，返回按钮回到主界面。
+    设置面板，通过 show() 弹出 AlertDialog。
+    关闭后从 page.overlay 移除，不改变路由。
     """
 
     def __init__(self, page: ft.Page, settings: SettingsManager):
-        super().__init__(route="/settings")
         self._page = page
         self._settings = settings
+
+    def show(self) -> None:
+        """弹出设置 Dialog。"""
         self._build()
 
     # ------------------------------------------------------------------
@@ -23,7 +26,7 @@ class SettingsPage(ft.View):
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        """构建设置页面所有控件。"""
+        """构建设置 AlertDialog 并显示。"""
         # Overleaf Cookie（密码掩码）
         self._tf_cookie = ft.TextField(
             label="Overleaf Cookie",
@@ -60,20 +63,10 @@ class SettingsPage(ft.View):
             expand=True,
         )
 
-        # 保存状态提示
-        self._snack = ft.SnackBar(content=ft.Text(""))
-
-        self.appbar = ft.AppBar(
-            leading=ft.IconButton(
-                icon=ft.Icons.ARROW_BACK,
-                tooltip="返回主界面",
-                on_click=lambda _: self._page.go("/"),
-            ),
+        dlg = ft.AlertDialog(
+            modal=True,
             title=ft.Text("设置"),
-        )
-
-        self.controls = [
-            ft.Container(
+            content=ft.Container(
                 content=ft.Column(
                     controls=[
                         ft.Text("Overleaf 配置", style=ft.TextThemeStyle.TITLE_MEDIUM),
@@ -83,28 +76,42 @@ class SettingsPage(ft.View):
                         ft.Text("LLM Agent 配置", style=ft.TextThemeStyle.TITLE_MEDIUM),
                         self._tf_llm_key,
                         self._tf_llm_endpoint,
-                        ft.Divider(),
-                        ft.ElevatedButton(
-                            text="保存配置",
-                            icon=ft.Icons.SAVE,
-                            on_click=self._on_save,
-                        ),
-                        self._snack,
                     ],
                     spacing=16,
+                    tight=True,
                     scroll=ft.ScrollMode.AUTO,
+                    width=480,
                 ),
-                padding=24,
-                expand=True,
-            )
-        ]
+                padding=ft.padding.only(top=8),
+            ),
+            actions=[
+                ft.TextButton("取消", on_click=lambda _: self._close(dlg)),
+                ft.ElevatedButton(
+                    "保存",
+                    icon=ft.Icons.SAVE,
+                    on_click=lambda _: self._on_save(dlg),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self._dlg = dlg
+        self._page.overlay.append(dlg)
+        dlg.open = True
+        self._page.update()
 
     # ------------------------------------------------------------------
     # 事件处理
     # ------------------------------------------------------------------
 
-    def _on_save(self, _) -> None:
-        """保存所有配置到 config.json。"""
+    def _close(self, dlg: ft.AlertDialog) -> None:
+        """关闭并清理 Dialog。"""
+        dlg.open = False
+        self._page.update()
+        if dlg in self._page.overlay:
+            self._page.overlay.remove(dlg)
+
+    def _on_save(self, dlg: ft.AlertDialog) -> None:
+        """保存所有配置到 config.json 后关闭 Dialog。"""
         self._settings.cookie = self._tf_cookie.value or ""
         self._settings.project_id = self._tf_project_id.value or ""
         self._settings.llm = {
@@ -112,7 +119,4 @@ class SettingsPage(ft.View):
             "endpoint": self._tf_llm_endpoint.value or "",
         }
         self._settings.save()
-
-        self._snack.content = ft.Text("配置已保存")
-        self._snack.open = True
-        self._page.update()
+        self._close(dlg)

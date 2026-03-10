@@ -11,8 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import flet as ft
 
 from config.settings_manager import SettingsManager
-from gui.app import MainView
-from gui.settings import SettingsPage
+from gui.app import OverleavesApp
 from storage.local_storage import LocalStorage
 
 # 配置日志（禁止输出 Cookie 等敏感信息）
@@ -48,24 +47,10 @@ def main(page: ft.Page) -> None:
             )
         )
 
-    # 路由处理
-    def route_change(e: ft.RouteChangeEvent) -> None:
-        page.views.clear()
-        if page.route == "/settings":
-            page.views.append(SettingsPage(page, settings))
-        else:
-            page.views.append(MainView(page, settings, storage))
-        page.update()
-
-    def view_pop(e: ft.ViewPopEvent) -> None:
-        page.views.pop()
-        top_view = page.views[-1]
-        page.go(top_view.route)
-
-    page.on_route_change = route_change
-    page.on_view_pop = view_pop
-    page.go(page.route)
+    # 直接构建应用，不使用 ft.View 路由
+    app = OverleavesApp(page, settings, storage)
+    app.build()
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(main)
