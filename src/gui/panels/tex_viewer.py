@@ -110,6 +110,10 @@ class TexViewerPanel(ft.Column):
         )
 
     def _make_text_view(self, content: str) -> ft.Control:
+        # 超过 100KB 的文本截断显示，避免 TextField 渲染卡顿
+        MAX_CHARS = 100_000
+        if len(content) > MAX_CHARS:
+            content = content[:MAX_CHARS] + f"\n\n... （文件过大，仅显示前 {MAX_CHARS} 字符）"
         return ft.Container(
             content=ft.TextField(
                 value=content,
@@ -145,7 +149,7 @@ class TexViewerPanel(ft.Column):
             doc = fitz.open(stream=data, filetype="pdf")
             views = []
             for i in range(len(doc)):
-                pix = doc[i].get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+                pix = doc[i].get_pixmap(matrix=fitz.Matrix(1.2, 1.2))
                 png_bytes = pix.tobytes("png")
                 views.append(
                     ft.Container(

@@ -50,7 +50,7 @@ class PdfViewerPanel(ft.Column):
         try:
             doc = fitz.open(str(self._pdf_path))
             page_count = len(doc)
-            mat = fitz.Matrix(2.0, 2.0)
+            mat = fitz.Matrix(1.5, 1.5)
             for page_num in range(page_count):
                 png_bytes = doc[page_num].get_pixmap(matrix=mat).tobytes("png")
                 self.controls.append(

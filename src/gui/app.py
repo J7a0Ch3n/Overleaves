@@ -171,15 +171,25 @@ class OverleavesApp:
         project_id = self._settings.project_id
         rel_path = node.get("path") or node.get("name", "")
         node_type = node.get("type", "doc")
-        # folder 节点不处理
         if node_type == "folder":
             return
-        try:
-            content = self._storage.read_file(project_id, rel_path)
-            # read_file 返回 bytes；文本解码留给 TexViewerPanel 按扩展名判断
-            self._tex_viewer.load_file(rel_path, content)
-        except FileNotFoundError:
-            self._tex_viewer.load_file(rel_path, f"（文件 {rel_path} 暂无本地缓存，请先拉取项目）")
+
+        def load_task():
+            try:
+                self._set_loading(True)
+                content = self._storage.read_file(project_id, rel_path)
+                self._tex_viewer.load_file(rel_path, content)
+            except FileNotFoundError:
+                self._tex_viewer.load_file(
+                    rel_path,
+                    f"（文件 {rel_path} 暂无本地缓存，请先拉取项目）".encode()
+                )
+            except Exception as e:
+                logger.error("加载文件失败：%s", e)
+            finally:
+                self._set_loading(False)
+
+        threading.Thread(target=load_task, daemon=True).start()
 
     def _on_fetch(self, _) -> None:
         cookie = self._settings.cookie
