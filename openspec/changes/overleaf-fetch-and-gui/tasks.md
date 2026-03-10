@@ -6,9 +6,9 @@
 
 ## 2. 配置管理模块（config/settings_manager.py）
 
-- [ ] 2.1 实现 `SettingsManager` 类，从 `~/.overleaves/config.json` 读取配置（文件不存在时返回空配置）
-- [ ] 2.2 实现 `save()` 方法，将配置写入 `~/.overleaves/config.json`（UTF-8 JSON）
-- [ ] 2.3 实现配置文件格式损坏时的降级处理：捕获 `json.JSONDecodeError`，以空配置继续运行并记录警告日志
+- [x] 2.1 实现 `SettingsManager` 类，从 `~/.overleaves/config.json` 读取配置（文件不存在时返回空配置）
+- [x] 2.2 实现 `save()` 方法，将配置写入 `~/.overleaves/config.json`（UTF-8 JSON）
+- [x] 2.3 实现配置文件格式损坏时的降级处理：捕获 `json.JSONDecodeError`，以空配置继续运行并记录警告日志
 
 ## 3. 本地存储模块（storage/local_storage.py）
 
