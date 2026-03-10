@@ -34,7 +34,6 @@ class SettingsPanel:
             password=True,
             can_reveal_password=True,
             value=self._settings.cookie,
-            expand=True,
         )
 
         # Overleaf 项目 ID
@@ -42,7 +41,6 @@ class SettingsPanel:
             label="Overleaf 项目 ID",
             hint_text="项目 URL 中的 project/<id> 部分",
             value=self._settings.project_id,
-            expand=True,
         )
 
         # LLM API Key（密码掩码）
@@ -52,7 +50,6 @@ class SettingsPanel:
             password=True,
             can_reveal_password=True,
             value=llm.get("api_key", ""),
-            expand=True,
         )
 
         # LLM Endpoint
@@ -60,7 +57,6 @@ class SettingsPanel:
             label="LLM API Endpoint",
             hint_text="例如：https://api.openai.com/v1",
             value=llm.get("endpoint", ""),
-            expand=True,
         )
 
         dlg = ft.AlertDialog(
@@ -78,10 +74,10 @@ class SettingsPanel:
                         self._tf_llm_endpoint,
                     ],
                     spacing=16,
-                    tight=True,
                     scroll=ft.ScrollMode.AUTO,
-                    width=480,
                 ),
+                width=480,
+                height=400,
                 padding=ft.padding.only(top=8),
             ),
             actions=[
@@ -106,9 +102,9 @@ class SettingsPanel:
     def _close(self, dlg: ft.AlertDialog) -> None:
         """关闭并清理 Dialog。"""
         dlg.open = False
-        self._page.update()
         if dlg in self._page.overlay:
             self._page.overlay.remove(dlg)
+        self._page.update()
 
     def _on_save(self, dlg: ft.AlertDialog) -> None:
         """保存所有配置到 config.json 后关闭 Dialog。"""
