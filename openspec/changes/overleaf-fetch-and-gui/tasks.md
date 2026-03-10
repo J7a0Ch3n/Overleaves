@@ -29,28 +29,28 @@
 
 ## 5. GUI 设置页面（gui/settings.py）
 
-- [ ] 5.1 实现 `SettingsPage` Flet 视图，包含：Overleaf Cookie 输入框（password=True）、项目 ID 输入框、LLM API Key 输入框（password=True）、LLM endpoint 输入框
-- [ ] 5.2 实现"保存"按钮点击逻辑，调用 `SettingsManager.save()` 持久化配置
-- [ ] 5.3 页面加载时从 `SettingsManager` 读取已有配置填充各输入框
+- [x] 5.1 实现 `SettingsPage` Flet 视图，包含：Overleaf Cookie 输入框（password=True）、项目 ID 输入框、LLM API Key 输入框（password=True）、LLM endpoint 输入框
+- [x] 5.2 实现“保存”按鈕点击逻辑，调用 `SettingsManager.save()` 持久化配置
+- [x] 5.3 页面加载时从 `SettingsManager` 读取已有配置填充各输入框
 
 ## 6. GUI 文件树面板（gui/panels/file_tree.py）
 
-- [ ] 6.1 实现 `FileTreePanel`，接收文件树数据，渲染为可展开/折叠的层级列表
-- [ ] 6.2 实现文件节点点击回调，触发中间面板加载对应文件内容
-- [ ] 6.3 实现无数据状态：显示"请先拉取远程项目"提示
+- [x] 6.1 实现 `FileTreePanel`，接收文件树数据，渲染为可展开/折叠的层级列表
+- [x] 6.2 实现文件节点点击回调，触发中间面板加载对应文件内容
+- [x] 6.3 实现无数据状态：显示“请先拉取远程项目”提示
 
 ## 7. GUI TeX 内容面板（gui/panels/tex_viewer.py）
 
-- [ ] 7.1 实现 `TexViewerPanel`，使用等宽字体的 `ft.TextField(read_only=True, multiline=True)` 展示文件内容，支持垂直滚动
-- [ ] 7.2 实现无文件选中状态：显示"请在左侧选择文件"提示
-- [ ] 7.3 实现 `load_file(content: str)` 方法，更新面板内容
+- [x] 7.1 实现 `TexViewerPanel`，使用等宽字体的 `ft.TextField(read_only=True, multiline=True)` 展示文件内容，支持垂直滚动
+- [x] 7.2 实现无文件选中状态：显示“请在左侧选择文件”提示
+- [x] 7.3 实现 `load_file(content: str)` 方法，更新面板内容
 
 ## 8. GUI PDF 预览面板（gui/panels/pdf_viewer.py）
 
-- [ ] 8.1 实现 `PdfViewerPanel`，接收 PDF 文件路径，使用 `pymupdf` 将所有页面渲染为 PNG 图片（base64 编码）
-- [ ] 8.2 用 `ft.Image(src_base64=...)` 列表展示各页，支持垂直滚动
-- [ ] 8.3 实现无 PDF 状态：显示"请先触发远程编译"提示
-- [ ] 8.4 实现 `reload(pdf_path)` 方法，重新加载新 PDF
+- [x] 8.1 实现 `PdfViewerPanel`，接收 PDF 文件路径，使用 `pymupdf` 将所有页面渲染为 PNG 图片（base64 编码）
+- [x] 8.2 用 `ft.Image(src_base64=...)` 列表展示各页，支持垂直滚动
+- [x] 8.3 实现无 PDF 状态：显示“请先触发远程编译”提示
+- [x] 8.4 实现 `reload(pdf_path)` 方法，重新加载新 PDF
 
 ## 9. GUI 主应用框架（gui/app.py & src/main.py）
 

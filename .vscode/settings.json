@@ -11,6 +11,14 @@
         "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0, 'src'\\)\nfrom overleaf\\.exceptions import OverleafAuthError, OverleafNotFoundError, OverleafNetworkError, OverleafCompileTimeoutError\nfrom overleaf\\.client import OverleafClient\n\n# 测试 Cookie 为空时抛出 ValueError\ntry:\n    OverleafClient\\(''\\)\n    assert False, '应该抛出 ValueError'\nexcept ValueError as e:\n    print\\('空 Cookie 检测通过:', e\\)\n\ntry:\n    OverleafClient\\(None\\)\n    assert False, '应该抛出 ValueError'\nexcept ValueError as e:\n    print\\('None Cookie 检测通过:', e\\)\n\n# 测试正常实例化\nclient = OverleafClient\\('session=fake_cookie_for_test'\\)\nprint\\('OverleafClient 实例化成功'\\)\n\n# 验证异常类可正常使用\ntry:\n    raise OverleafAuthError\\('测试认证错误'\\)\nexcept OverleafAuthError as e:\n    print\\('OverleafAuthError 正常:', e\\)\n\nprint\\('所有 Overleaf 客户端基础测试通过'\\)\n\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^python -c \"import sys; sys\\.path\\.insert\\(0,'src'\\); import flet; from config\\.settings_manager import SettingsManager; from gui\\.settings import SettingsPage; print\\('SettingsPage 模块导入成功'\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0,'src'\\)\nfrom gui\\.panels\\.file_tree import FileTreePanel\nfrom gui\\.panels\\.tex_viewer import TexViewerPanel\nfrom gui\\.panels\\.pdf_viewer import PdfViewerPanel\nprint\\('三个面板模块导入成功'\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
