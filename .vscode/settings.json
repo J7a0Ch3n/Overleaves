@@ -63,6 +63,15 @@
         },
         "from": true,
         "logger": true,
-        "\\'\\'\\')": true
+        "\\'\\'\\')": true,
+        "New-Item": true,
+        "Out-Null": true,
+        "/^python -c \"import ast, sys; files = \\['src/config/settings_manager\\.py','src/storage/local_storage\\.py','src/overleaf/client\\.py','src/gui/panels/tex_viewer\\.py','src/gui/app\\.py'\\]; \\[print\\(f'OK: \\{f\\}'\\) if ast\\.parse\\(open\\(f,encoding='utf-8'\\)\\.read\\(\\)\\) else None for f in files\\]\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "git config": true,
+        "git add": true,
+        "git commit": true
     }
 }
