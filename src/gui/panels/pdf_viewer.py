@@ -49,17 +49,14 @@ class PdfViewerPanel(ft.Column):
 
         try:
             doc = fitz.open(str(self._pdf_path))
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                # 按 2x 分辨率渲染（提高清晰度）
-                mat = fitz.Matrix(2.0, 2.0)
-                pix = page.get_pixmap(matrix=mat)
-                png_bytes = pix.tobytes("png")
-
+            page_count = len(doc)
+            mat = fitz.Matrix(2.0, 2.0)
+            for page_num in range(page_count):
+                png_bytes = doc[page_num].get_pixmap(matrix=mat).tobytes("png")
                 self.controls.append(
                     ft.Container(
                         content=ft.Image(
-                            src=pix.tobytes("png"),
+                            src=png_bytes,
                             fit=ft.BoxFit.CONTAIN,
                             expand=True,
                         ),
@@ -68,7 +65,7 @@ class PdfViewerPanel(ft.Column):
                     )
                 )
             doc.close()
-            logger.info("PDF 预览渲染完成，共 %d 页", len(doc))
+            logger.info("PDF 预览渲染完成，共 %d 页", page_count)
         except Exception as e:
             logger.error("PDF 渲染失败：%s", e)
             self.controls = [
