@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-Content ''D:\\\\git_repos\\\\XWTY_ABMS\\\\abms_backend\\\\handlers\\\\task.go'' -Tail 5\")",
+      "Bash(powershell -Command:*)",
+      "Bash(echo:*)",
+      "Bash(go build:*)",
+      "Bash(pnpm build)"
+    ]
+  }
+}
