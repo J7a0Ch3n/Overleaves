@@ -20,12 +20,12 @@
 
 ## 4. Overleaf HTTP 客户端（overleaf/client.py）
 
-- [ ] 4.1 定义自定义异常：`OverleafAuthError`、`OverleafNotFoundError`、`OverleafNetworkError`、`OverleafCompileTimeoutError`
-- [ ] 4.2 实现 `OverleafClient.__init__(cookie: str)`，Cookie 为空时抛出 `ValueError`；初始化 `requests.Session`，设置 Cookie Header，日志中 Cookie 值替换为 `[REDACTED]`
-- [ ] 4.3 实现 `get_file_tree(project_id)` 方法，GET 项目页面解析 `rootFolder` 数据，返回嵌套文件树结构；HTTP 401/302 时抛出 `OverleafAuthError`
-- [ ] 4.4 实现 `download_file(project_id, node)` 方法，区分 doc 类型（返回 str）和 file 类型（返回 bytes）；网络错误抛出 `OverleafNetworkError`
-- [ ] 4.5 实现 `compile_project(project_id)` 方法，POST 编译请求，超时 60s 抛出 `OverleafCompileTimeoutError`，返回编译状态和日志
-- [ ] 4.6 实现 `download_pdf(project_id, local_path)` 方法，GET 下载 PDF 到指定路径；404 时抛出 `OverleafNotFoundError`
+- [x] 4.1 定义自定义异常：`OverleafAuthError`、`OverleafNotFoundError`、`OverleafNetworkError`、`OverleafCompileTimeoutError`
+- [x] 4.2 实现 `OverleafClient.__init__(cookie: str)`，Cookie 为空时抛出 `ValueError`；初始化 `requests.Session`，设置 Cookie Header，日志中 Cookie 值替换为 `[REDACTED]`
+- [x] 4.3 实现 `get_file_tree(project_id)` 方法，GET 项目页面解析 `rootFolder` 数据，返回嵌套文件树结构；HTTP 401/302 时抛出 `OverleafAuthError`
+- [x] 4.4 实现 `download_file(project_id, node)` 方法，区分 doc 类型（返回 str）和 file 类型（返回 bytes）；网络错误抛出 `OverleafNetworkError`
+- [x] 4.5 实现 `compile_project(project_id)` 方法，POST 编译请求，超时 60s 抛出 `OverleafCompileTimeoutError`，返回编译状态和日志
+- [x] 4.6 实现 `download_pdf(project_id, local_path)` 方法，GET 下载 PDF 到指定路径；404 时抛出 `OverleafNotFoundError`
 
 ## 5. GUI 设置页面（gui/settings.py）
 
