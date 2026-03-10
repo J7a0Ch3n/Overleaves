@@ -62,7 +62,7 @@
 
 ## 10. 打包与文档
 
-- [ ] 10.1 创建 `overleaves.spec`（PyInstaller spec 文件），配置 `--onefile --windowed`，处理 pymupdf 的 binaries/datas
-- [ ] 10.2 创建 `build.ps1`（Windows PowerShell 打包脚本），执行 `pyinstaller overleaves.spec`
-- [ ] 10.3 更新 `README.md`：项目简介、安装依赖步骤（`pip install -r requirements.txt`）、运行方式（`python src/main.py`）、Windows exe 打包步骤（执行 `.\build.ps1`）
-- [ ] 10.4 本地执行 `.\build.ps1` 验证打包成功，确认 `dist/overleaves.exe` 可启动
+- [x] 10.1 创建 `overleaves.spec`（PyInstaller spec 文件），配置 `--onefile --windowed`，处理 pymupdf 的 binaries/datas
+- [x] 10.2 创建 `build.ps1`（Windows PowerShell 打包脚本），执行 `pyinstaller overleaves.spec`
+- [x] 10.3 更新 `README.md`：项目简介、安装依赖步骤（`pip install -r requirements.txt`）、运行方式（`python src/main.py`）、Windows exe 打包步骤（执行 `.\build.ps1`）
+- [x] 10.4 本地执行 `.\build.ps1` 验证打包成功，确认 `dist/overleaves.exe` 可启动
