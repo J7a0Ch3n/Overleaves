@@ -169,14 +169,14 @@ class OverleavesApp:
 
     def _on_file_select(self, node: dict) -> None:
         project_id = self._settings.project_id
-        # 优先用 path 字段（完整相对路径），回退到 name
         rel_path = node.get("path") or node.get("name", "")
-        if node.get("type", "doc") not in ("doc",):
+        node_type = node.get("type", "doc")
+        # folder 节点不处理
+        if node_type == "folder":
             return
         try:
             content = self._storage.read_file(project_id, rel_path)
-            if isinstance(content, bytes):
-                content = content.decode("utf-8", errors="replace")
+            # read_file 返回 bytes；文本解码留给 TexViewerPanel 按扩展名判断
             self._tex_viewer.load_file(rel_path, content)
         except FileNotFoundError:
             self._tex_viewer.load_file(rel_path, f"（文件 {rel_path} 暂无本地缓存，请先拉取项目）")

@@ -53,20 +53,14 @@ class LocalStorage:
         logger.debug("已缓存文件：%s", target)
         return target
 
-    def read_file(self, project_id: str, relative_path: str) -> Union[str, bytes]:
+    def read_file(self, project_id: str, relative_path: str) -> bytes:
         """
-        从本地缓存读取文件内容。
-        - .tex / .bib / .md 等文本文件返回 str（UTF-8）
-        - 其余文件返回 bytes
+        从本地缓存读取文件内容，统一返回 bytes。
         文件不存在时抛出 FileNotFoundError。
         """
         target = self._project_dir(project_id) / relative_path
         if not target.exists():
             raise FileNotFoundError(f"本地缓存中未找到文件：{target}")
-        # 文本扩展名列表
-        text_exts = {".tex", ".bib", ".txt", ".md", ".sty", ".cls", ".bst", ".cfg"}
-        if target.suffix.lower() in text_exts:
-            return target.read_text(encoding="utf-8")
         return target.read_bytes()
 
     def save_pdf(self, project_id: str, pdf_bytes: bytes) -> Path:
