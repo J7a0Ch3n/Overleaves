@@ -1,1 +1,4 @@
 # Overleaves
+
+Overleaves是一款跨平台论文写作agent工具，仿照olcli拉取overleaf项目的内容，通过agent功能协助用户进行论文写作、内容修改、格式调整等操作，最终将修改结果推送回overleaf项目。
+
