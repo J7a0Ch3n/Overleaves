@@ -47,6 +47,22 @@
         "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0, 'src'\\)\nfrom gui\\.panels\\.file_tree import FileTreePanel\nfrom gui\\.panels\\.tex_viewer import TexViewerPanel\nfrom gui\\.panels\\.pdf_viewer import PdfViewerPanel\nfrom gui\\.app import MainView\nfrom gui\\.settings import SettingsPage\nfrom config\\.settings_manager import SettingsManager\nfrom storage\\.local_storage import LocalStorage\n\np = FileTreePanel\\(\\)\np\\.expand = 2\nt = TexViewerPanel\\(\\)\nt\\.expand = 3\npv = PdfViewerPanel\\(\\)\npv\\.expand = 3\nprint\\('所有面板初始化正常，expand 权重设置成功'\\)\nprint\\('请运行 python src/main\\.py 验证 GUI'\\)\n\"$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "/^python src/main\\.py 2>&1 &$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "Start-Process": true,
+        "/^python -c \"\nimport flet as ft\nprint\\('ft\\.View:', hasattr\\(ft, 'View'\\)\\)\nprint\\('ft\\.ExpansionTile:', hasattr\\(ft, 'ExpansionTile'\\)\\)\nprint\\('ft\\.VerticalDivider:', hasattr\\(ft, 'VerticalDivider'\\)\\)\nprint\\('ft\\.run:', hasattr\\(ft, 'run'\\)\\)\nprint\\('ft\\.app deprecated - needs ft\\.run\\(\\)'\\)\n\n# 测试 page\\.push_route 是否是新 API\nimport inspect\nsrc = inspect\\.getsource\\(ft\\.Page\\.go\\) if hasattr\\(ft\\.Page, 'go'\\) else 'no go'\nprint\\('Page\\.go exists:', hasattr\\(ft\\.Page, 'go'\\)\\)\nprint\\('Page\\.push_route exists:', hasattr\\(ft\\.Page, 'push_route'\\)\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"\nimport flet as ft\n\n# 测试最简单的 View \\+ Column \\+ Row 布局是否能渲染\ndef test\\(page: ft\\.Page\\):\n    page\\.title = 'test'\n    def on_route_change\\(e\\):\n        page\\.views\\.clear\\(\\)\n        v = ft\\.View\\(route='/'\\)\n        v\\.controls = \\[\n            ft\\.Column\\(\n                controls=\\[ft\\.Text\\('HELLO WORLD', size=30\\)\\],\n                expand=True,\n            \\)\n        \\]\n        page\\.views\\.append\\(v\\)\n        page\\.update\\(\\)\n    page\\.on_route_change = on_route_change\n    page\\.go\\(page\\.route\\)\n\n# 不能真正运行，但验证没有导入错误\nprint\\('layout test OK'\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "from": true,
+        "logger": true,
+        "\\'\\'\\')": true
     }
 }
