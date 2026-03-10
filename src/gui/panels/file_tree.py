@@ -25,15 +25,19 @@ class FileTreePanel(ft.Column):
     # 公开接口
     # ------------------------------------------------------------------
 
-    def load_tree(self, root_folder: list) -> None:
-        """加载并渲染文件树。"""
+    def load_tree(self, root_folder: list, *, trigger_update: bool = True) -> None:
+        """加载并渲染文件树。
+        trigger_update=False 时仅更新控件状态，不调用 update()，
+        由调用方统一执行 page.update()（避免后台线程连续触发两次更新丢失）。
+        """
         self.controls.clear()
         if not root_folder:
             self._show_empty()
             return
         for node in root_folder:
             self.controls.append(self._build_node(node, depth=0))
-        self.update()
+        if trigger_update:
+            self.update()
 
     def clear(self) -> None:
         """清空文件树，回到空状态提示。"""

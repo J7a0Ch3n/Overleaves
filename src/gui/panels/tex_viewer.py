@@ -33,10 +33,12 @@ class TexViewerPanel(ft.Column):
     # 公开接口
     # ------------------------------------------------------------------
 
-    def load_file(self, filename: str, content) -> None:
+    def load_file(self, filename: str, content, *, trigger_update: bool = True) -> None:
         """
         加载文件内容到面板。
         content 为 str（文本）或 bytes（二进制），面板自动选择展示方式。
+        trigger_update=False 时仅更新控件状态，不调用 update()，
+        由调用方统一执行 page.update()（避免后台线程连续触发两次更新丢失）。
         """
         self._current_filename = filename
         ext = Path(filename).suffix.lower()
@@ -67,11 +69,13 @@ class TexViewerPanel(ft.Column):
                             expand=True,
                         )
                     )
-                    self.update()
+                    if trigger_update:
+                        self.update()
                     return
             self.controls.append(self._make_text_view(content))
 
-        self.update()
+        if trigger_update:
+            self.update()
 
     def clear(self) -> None:
         """清空内容，回到空状态。"""

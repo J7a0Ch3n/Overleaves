@@ -174,19 +174,25 @@ class OverleavesApp:
         if node_type == "folder":
             return
 
+        # 在主线程立即显示加载状态，确保 UI 响应及时
+        self._set_loading(True)
+
         def load_task():
             try:
-                self._set_loading(True)
                 content = self._storage.read_file(project_id, rel_path)
-                self._tex_viewer.load_file(rel_path, content)
+                # trigger_update=False：不在此处调用 update()，
+                # 由下方 _set_loading(False) 的 page.update() 一次性刷新
+                self._tex_viewer.load_file(rel_path, content, trigger_update=False)
             except FileNotFoundError:
                 self._tex_viewer.load_file(
                     rel_path,
-                    f"（文件 {rel_path} 暂无本地缓存，请先拉取项目）".encode()
+                    f"（文件 {rel_path} 暂无本地缓存，请先拉取项目）".encode(),
+                    trigger_update=False,
                 )
             except Exception as e:
                 logger.error("加载文件失败：%s", e)
             finally:
+                # 单次 page.update()：同时刷新面板内容 + 隐藏进度条
                 self._set_loading(False)
 
         threading.Thread(target=load_task, daemon=True).start()
@@ -201,9 +207,11 @@ class OverleavesApp:
             self._show_error("未配置项目 ID", "请先在设置中配置 Overleaf 项目 ID")
             return
 
+        # 在主线程立即显示加载状态
+        self._set_loading(True)
+
         def fetch_task():
             try:
-                self._set_loading(True)
                 client = OverleafClient(cookie)
                 # 获取文件列表（扁平结构）
                 entities = client.get_entities(project_id)
@@ -214,9 +222,9 @@ class OverleavesApp:
                     content = zf.read(zip_name)
                     self._storage.save_file(project_id, zip_name, content)
                 zf.close()
-                # 构建文件树并更新 UI
+                # 构建文件树（不触发中间 update，由 _set_loading(False) 统一刷新）
                 tree = _build_tree_from_entities(entities)
-                self._file_tree.load_tree(tree)
+                self._file_tree.load_tree(tree, trigger_update=False)
             except OverleafAuthError as e:
                 self._show_error("认证失败", str(e))
             except OverleafNetworkError as e:
@@ -227,6 +235,7 @@ class OverleavesApp:
                 logger.error("拉取失败：%s", e)
                 self._show_error("拉取失败", str(e))
             finally:
+                # 单次 page.update()：同时刷新文件树 + 隐藏进度条
                 self._set_loading(False)
 
         threading.Thread(target=fetch_task, daemon=True).start()
@@ -241,9 +250,11 @@ class OverleavesApp:
             self._show_error("未配置项目 ID", "请先在设置中配置 Overleaf 项目 ID")
             return
 
+        # 在主线程立即显示加载状态
+        self._set_loading(True)
+
         def compile_task():
             try:
-                self._set_loading(True)
                 client = OverleafClient(cookie)
                 result = client.compile_project(project_id)
                 if result["status"] != "success":
@@ -251,7 +262,8 @@ class OverleavesApp:
                     return
                 pdf_path = self._storage.get_pdf_path(project_id)
                 client.download_pdf(project_id, pdf_path, pdf_url=result.get("pdf_url", ""))
-                self._pdf_viewer.reload(pdf_path)
+                # 不触发中间 update，由 _set_loading(False) 统一刷新
+                self._pdf_viewer.reload(pdf_path, trigger_update=False)
             except OverleafAuthError as e:
                 self._show_error("认证失败", str(e))
             except OverleafCompileTimeoutError as e:
@@ -264,6 +276,7 @@ class OverleavesApp:
                 logger.error("编译/PDF 失败：%s", e)
                 self._show_error("操作失败", str(e))
             finally:
+                # 单次 page.update()：同时刷新 PDF 内容 + 隐藏进度条
                 self._set_loading(False)
 
         threading.Thread(target=compile_task, daemon=True).start()

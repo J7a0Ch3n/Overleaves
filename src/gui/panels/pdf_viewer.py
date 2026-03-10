@@ -30,21 +30,26 @@ class PdfViewerPanel(ft.Column):
     # 公开接口
     # ------------------------------------------------------------------
 
-    def reload(self, pdf_path: str | Path) -> None:
-        """加载并渲染指定路径的 PDF 文件。"""
+    def reload(self, pdf_path: str | Path, *, trigger_update: bool = True) -> None:
+        """加载并渲染指定路径的 PDF 文件。
+        trigger_update=False 时仅更新控件状态，不调用 update()，
+        由调用方统一执行 page.update()（避免后台线程连续触发两次更新丢失）。
+        """
         self._pdf_path = Path(pdf_path)
         self.controls.clear()
 
         if not self._pdf_path.exists():
             self._show_empty()
-            self.update()
+            if trigger_update:
+                self.update()
             return
 
         try:
             import fitz  # PyMuPDF
         except ImportError:
             self.controls = [ft.Text("PyMuPDF 未安装，无法预览 PDF", color=ft.Colors.RED)]
-            self.update()
+            if trigger_update:
+                self.update()
             return
 
         try:
@@ -72,7 +77,8 @@ class PdfViewerPanel(ft.Column):
                 ft.Text(f"PDF 预览失败：{e}", color=ft.Colors.RED)
             ]
 
-        self.update()
+        if trigger_update:
+            self.update()
 
     def clear(self) -> None:
         """清空 PDF 预览，回到空状态。"""
