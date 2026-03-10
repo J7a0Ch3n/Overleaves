@@ -63,6 +63,10 @@
         },
         "from": true,
         "logger": true,
-        "\\'\\'\\')": true
+        "\\'\\'\\')": true,
+        "New-Item": true,
+        "Out-Null": true,
+        "git add": true,
+        "git commit": true
     }
 }
