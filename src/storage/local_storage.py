@@ -1,9 +1,11 @@
 """
 本地存储模块：将 Overleaf 拉取的项目文件缓存到 ~/.overleaves/projects/<project_id>/
+支持保存/加载项目元数据（entities 列表），实现免网络加载文件树。
 """
+import json
 import logging
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -83,3 +85,35 @@ class LocalStorage:
         if not PROJECTS_DIR.exists():
             return []
         return [d.name for d in PROJECTS_DIR.iterdir() if d.is_dir()]
+
+    def project_exists(self, project_id: str) -> bool:
+        """检查项目缓存目录是否存在。"""
+        return self._project_dir(project_id).exists()
+
+    def save_project_meta(self, project_id: str, entities: list, name: str = "") -> None:
+        """
+        保存项目元数据（entities 列表和项目名称）到 project_meta.json。
+        用于启动时免网络自动加载文件树。
+        """
+        meta = {"name": name or project_id, "entities": entities}
+        meta_path = self._project_dir(project_id) / "project_meta.json"
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info("项目元数据已保存：%s（共 %d 个文件）", project_id, len(entities))
+
+    def load_project_meta(self, project_id: str) -> Optional[dict]:
+        """
+        从缓存加载项目元数据。
+        返回 {"name": ..., "entities": [...]} 字典；缓存不存在时返回 None。
+        """
+        meta_path = self._project_dir(project_id) / "project_meta.json"
+        if not meta_path.exists():
+            return None
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            logger.info("从缓存加载项目元数据：%s（共 %d 个文件）",
+                        project_id, len(data.get("entities", [])))
+            return data
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("项目元数据损坏，忽略缓存：%s", e)
+            return None
