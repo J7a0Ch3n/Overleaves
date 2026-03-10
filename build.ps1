@@ -1,4 +1,4 @@
-# Overleaves Windows 打包脚本
+﻿# Overleaves Windows 打包脚本
 # 用法：在项目根目录执行 .\build.ps1
 
 Set-StrictMode -Version Latest
@@ -8,8 +8,14 @@ Write-Host "===== Overleaves Windows 打包脚本 =====" -ForegroundColor Cyan
 
 # 1. 检查依赖
 Write-Host "`n[1/3] 检查并安装依赖..." -ForegroundColor Yellow
+# pip 会向 stderr 写 [notice] 消息，ErrorActionPreference=Stop 会把 stderr 当终止错误
+# 暂时设为 Continue，用 $LASTEXITCODE 手动判断成败
+$prevPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 pip install -r requirements.txt --quiet
-if ($LASTEXITCODE -ne 0) {
+$pipExit = $LASTEXITCODE
+$ErrorActionPreference = $prevPref
+if ($pipExit -ne 0) {
     Write-Error "依赖安装失败，请检查 requirements.txt"
     exit 1
 }
