@@ -76,9 +76,7 @@ class SettingsPanel:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self._page.overlay.append(self._dlg)
-        self._dlg.open = True
-        self._page.update()
+        self._page.show_dialog(self._dlg)
 
     # ------------------------------------------------------------------
     # 事件处理
@@ -99,8 +97,4 @@ class SettingsPanel:
         self._close()
 
     def _close(self) -> None:
-        """关闭并清理 Dialog。"""
-        self._dlg.open = False
-        if self._dlg in self._page.overlay:
-            self._page.overlay.remove(self._dlg)
-        self._page.update()
+        self._page.pop_dialog()
