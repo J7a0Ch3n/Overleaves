@@ -144,9 +144,21 @@ class OverleavesApp:
     # ------------------------------------------------------------------
 
     def _set_loading(self, loading: bool) -> None:
+        """在事件处理器线程（调用 run_task 之前）直接调用，用于立即显示加载状态。"""
         self._progress.visible = loading
         self._btn_fetch.disabled = loading
         self._btn_compile.disabled = loading
+        self._page.update()
+
+    async def _finish_loading_async(self) -> None:
+        """
+        后台线程任务完成后，通过 page.run_task() 调度到 asyncio 事件循环执行。
+        page.update() 在事件循环线程中调用才能可靠触发 Flutter 重绘。
+        直接在 threading.Thread 里调用 page.update() 无法保证唤醒事件循环。
+        """
+        self._progress.visible = False
+        self._btn_fetch.disabled = False
+        self._btn_compile.disabled = False
         self._page.update()
 
     def _show_error(self, title: str, message: str) -> None:
@@ -192,8 +204,8 @@ class OverleavesApp:
             except Exception as e:
                 logger.error("加载文件失败：%s", e)
             finally:
-                # 单次 page.update()：同时刷新面板内容 + 隐藏进度条
-                self._set_loading(False)
+                # 通过事件循环调度 update，确保 Flutter 收到重绘信号
+                self._page.run_task(self._finish_loading_async)
 
         threading.Thread(target=load_task, daemon=True).start()
 
@@ -235,8 +247,7 @@ class OverleavesApp:
                 logger.error("拉取失败：%s", e)
                 self._show_error("拉取失败", str(e))
             finally:
-                # 单次 page.update()：同时刷新文件树 + 隐藏进度条
-                self._set_loading(False)
+                self._page.run_task(self._finish_loading_async)
 
         threading.Thread(target=fetch_task, daemon=True).start()
 
@@ -276,7 +287,6 @@ class OverleavesApp:
                 logger.error("编译/PDF 失败：%s", e)
                 self._show_error("操作失败", str(e))
             finally:
-                # 单次 page.update()：同时刷新 PDF 内容 + 隐藏进度条
-                self._set_loading(False)
+                self._page.run_task(self._finish_loading_async)
 
         threading.Thread(target=compile_task, daemon=True).start()
