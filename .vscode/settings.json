@@ -19,6 +19,10 @@
         "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0,'src'\\)\nfrom gui\\.panels\\.file_tree import FileTreePanel\nfrom gui\\.panels\\.tex_viewer import TexViewerPanel\nfrom gui\\.panels\\.pdf_viewer import PdfViewerPanel\nprint\\('三个面板模块导入成功'\\)\n\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^cd C:\\\\work\\\\project\\\\Overleaves; python -c \"\nimport sys; sys\\.path\\.insert\\(0,'src'\\)\nfrom config\\.settings_manager import SettingsManager\nfrom storage\\.local_storage import LocalStorage\nfrom gui\\.app import MainView, _flatten_tree\nfrom gui\\.settings import SettingsPage\nimport main as app_main\nprint\\('主应用模块导入成功'\\)\n\n# 测试 _flatten_tree 辅助函数\nsample_tree = \\[\n    \\{'_id': '1', 'name': 'main\\.tex', 'type': 'doc'\\},\n    \\{'_id': '2', 'name': 'images', 'type': 'folder', 'docs': \\[\\], 'fileRefs': \\[\n        \\{'_id': '3', 'name': 'fig\\.png', 'type': 'file'\\}\n    \\], 'folders': \\[\\]\\},\n\\]\nresult = _flatten_tree\\(sample_tree\\)\nassert len\\(result\\) == 2, f'展开结果数量错误: \\{result\\}'\nassert result\\[0\\]\\[0\\] == 'main\\.tex', f'路径错误: \\{result\\[0\\]\\}'\nassert result\\[1\\]\\[0\\] == 'images/fig\\.png', f'路径错误: \\{result\\[1\\]\\}'\nprint\\('文件树展开辅助函数测试通过'\\)\nprint\\('所有主应用模块测试通过'\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

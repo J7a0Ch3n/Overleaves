@@ -54,11 +54,11 @@
 
 ## 9. GUI 主应用框架（gui/app.py & src/main.py）
 
-- [ ] 9.1 实现 `main.py`，初始化 Flet 应用，注册路由（`/` 主界面、`/settings` 设置页）
-- [ ] 9.2 实现主界面三栏布局（`ft.Row` + expand 属性），集成 `FileTreePanel`、`TexViewerPanel`、`PdfViewerPanel`
-- [ ] 9.3 实现 `ft.AppBar`，包含"拉取远程项目"按钮、"远程编译并拉取 PDF 显示"按钮、"设置"入口
-- [ ] 9.4 实现"拉取远程项目"点击逻辑：检查 Cookie/project_id 配置，后台线程拉取全部文件，完成后刷新文件树，显示/隐藏加载指示器，失败时弹出错误对话框
-- [ ] 9.5 实现"远程编译并拉取 PDF 显示"点击逻辑：后台线程触发编译、下载 PDF，完成后刷新 PDF 预览，失败时弹出错误信息
+- [x] 9.1 实现 `main.py`，初始化 Flet 应用，注册路由（`/` 主界面、`/settings` 设置页）
+- [x] 9.2 实现主界面三栏布局（`ft.Row` + expand 属性），集成 `FileTreePanel`、`TexViewerPanel`、`PdfViewerPanel`
+- [x] 9.3 实现 `ft.AppBar`，包含“拉取远程项目”按鈕、“远程编译并拉取 PDF 显示”按鈕、“设置”入口
+- [x] 9.4 实现“拉取远程项目”点击逻辑：检查 Cookie/project_id 配置，后台线程拉取全部文件，完成后刷新文件树，显示/隐藏加载指示器，失败时弹出错误对话框
+- [x] 9.5 实现“远程编译并拉取 PDF 显示”点击逻辑：后台线程触发编译、下载 PDF，完成后刷新 PDF 预览，失败时弹出错误信息
 
 ## 10. 打包与文档
 
