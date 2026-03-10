@@ -115,5 +115,5 @@ class FileTreePanel(ft.Column):
             ),
             controls=child_controls,
             tile_padding=ft.padding.only(left=depth * 16 + 4),
-            initially_expanded=(depth == 0),
+            expanded=(depth == 0),
         )
