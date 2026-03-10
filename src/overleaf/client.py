@@ -94,15 +94,15 @@ class OverleafClient:
         return resp
 
     def _extract_csrf_token(self, project_id: str) -> str:
-        """从项目页面提取 CSRF token（_csrf 字段）。"""
+        """从项目页面 meta[name=ol-csrfToken] 提取 CSRF token。"""
         resp = self._get(f"{BASE_URL}/project/{project_id}")
-        # 尝试从 HTML meta 或 script 中提取 csrfToken
-        match = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', resp.text)
-        if match:
-            return match.group(1)
-        match = re.search(r'_csrf["\s:=]+(["\'])([a-zA-Z0-9\-_]+)\1', resp.text)
-        if match:
-            return match.group(2)
+        m = re.search(r'<meta\s+name=["\']ol-csrfToken["\']\s+content=["\']([^"\']+)', resp.text)
+        if m:
+            return m.group(1)
+        # 兜底：旧格式
+        m2 = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', resp.text)
+        if m2:
+            return m2.group(1)
         return ""
 
     # ------------------------------------------------------------------
@@ -150,10 +150,13 @@ class OverleafClient:
     def compile_project(self, project_id: str) -> dict:
         """
         触发 Overleaf 远程编译。
-        等待编译完成（轮询），超时 60s 抛出 OverleafCompileTimeoutError。
-        返回：{"status": "success"/"error", "output_files": [...], "logs": "..."}
+        返回：{"status": "success"/"error", "pdf_url": "...", "output_files": [...]}
+        pdf_url 为编译响应中 outputFiles 里 pdf 文件的完整 URL。
         """
         csrf = self._extract_csrf_token(project_id)
+        if not csrf:
+            raise OverleafAuthError("无法获取 CSRF token，请检查 Cookie 是否有效")
+
         url = f"{BASE_URL}/project/{project_id}/compile"
         payload = {
             "rootResourcePath": "main.tex",
@@ -161,12 +164,12 @@ class OverleafClient:
             "check": "silent",
             "incrementalCompilesEnabled": True,
         }
-        headers = {}
-        if csrf:
-            headers["X-Csrf-Token"] = csrf
+        headers = {"X-Csrf-Token": csrf}
 
         resp = self._post(url, json=payload, headers=headers, timeout=COMPILE_TIMEOUT)
 
+        if resp.status_code == 403:
+            raise OverleafAuthError("编译请求被拒绝（403），CSRF token 可能已过期")
         if resp.status_code == 408 or resp.elapsed.total_seconds() >= COMPILE_TIMEOUT:
             raise OverleafCompileTimeoutError(
                 f"编译请求超过 {COMPILE_TIMEOUT} 秒未返回，请稍后重试"
@@ -179,28 +182,44 @@ class OverleafClient:
 
         status = result.get("status", "error")
         output_files = result.get("outputFiles", [])
-        logs = result.get("outputFiles", "")
 
-        logger.info("项目 %s 编译结果：%s", project_id, status)
+        # 找到 PDF 文件的 URL（Overleaf 在 outputFiles 里提供完整 URL）
+        pdf_url = ""
+        for f in output_files:
+            if f.get("path", "").endswith(".pdf") or f.get("type") == "pdf":
+                pdf_url = f.get("url", "")
+                break
+
+        logger.info("项目 %s 编译结果：%s，pdf_url=%s", project_id, status, pdf_url[:60] if pdf_url else "(none)")
         return {
             "status": status,
+            "pdf_url": pdf_url,
             "output_files": output_files,
-            "logs": str(logs),
         }
 
-    def download_pdf(self, project_id: str, local_path: Union[str, Path]) -> Path:
+    def download_pdf(self, project_id: str, local_path, pdf_url: str = "") -> Path:
         """
         下载编译产出的 PDF 到 local_path。
+        pdf_url: compile_project() 返回的 pdf_url（优先使用）。
         返回写入的文件路径。
         """
         local_path = Path(local_path)
-        url = f"{BASE_URL}/project/{project_id}/output/output.pdf"
+
+        if pdf_url:
+            # Overleaf 返回的 outputFiles url 可能是绝对或相对路径
+            if pdf_url.startswith("http"):
+                url = pdf_url
+            else:
+                url = BASE_URL + pdf_url
+        else:
+            url = f"{BASE_URL}/project/{project_id}/output/output.pdf"
+
         resp = self._get(url, stream=True)
 
         if resp.status_code == 404:
-            raise OverleafNotFoundError(
-                "PDF 不存在，请先触发远程编译"
-            )
+            raise OverleafNotFoundError("PDF 不存在，请先触发远程编译")
+        if resp.status_code != 200:
+            raise OverleafNetworkError(f"PDF 下载失败（HTTP {resp.status_code}）")
 
         local_path.parent.mkdir(parents=True, exist_ok=True)
         with open(local_path, "wb") as f:

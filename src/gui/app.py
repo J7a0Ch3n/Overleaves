@@ -240,7 +240,7 @@ class OverleavesApp:
                     self._show_error("编译失败", "Overleaf 编译失败，请检查 TeX 源文件")
                     return
                 pdf_path = self._storage.get_pdf_path(project_id)
-                client.download_pdf(project_id, pdf_path)
+                client.download_pdf(project_id, pdf_path, pdf_url=result.get("pdf_url", ""))
                 self._pdf_viewer.reload(pdf_path)
             except OverleafAuthError as e:
                 self._show_error("认证失败", str(e))
