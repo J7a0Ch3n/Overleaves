@@ -9,7 +9,7 @@ import logging
 import re
 import threading as _threading
 import time as _time
-import uuid as _uuid
+
 import zipfile
 from pathlib import Path
 from typing import Union
@@ -456,20 +456,23 @@ class OverleafClient:
         folder_id = self._find_folder_id(parent_parts, root_folder_id, root_folders)
 
         file_bytes = content.encode("utf-8")
+        # 新版 Overleaf 使用 Uppy 上传库，文件名通过 multipart body 的 `name` 字段传递
+        # folder_id 和 _csrf 仍在 URL query string；qquuid/qqfilename/qqtotalfilesize 已废弃
         params = {
             "folder_id": folder_id,
             "_csrf": csrf,
-            "qquuid": str(_uuid.uuid4()),
-            "qqfilename": file_name,
-            "qqtotalfilesize": len(file_bytes),
         }
-        files = {"qqfile": (file_name, io.BytesIO(file_bytes), "text/plain")}
+        data = {
+            "name": file_name,
+            "relativePath": "null",  # Uppy 约定：不在子文件夹时传 "null" 字符串
+        }
+        files = {"qqfile": (file_name, io.BytesIO(file_bytes), "application/octet-stream")}
 
         url = f"{BASE_URL}/project/{project_id}/upload"
         logger.debug("upload: folder_id=%s, file=%s, size=%d", folder_id, file_name, len(file_bytes))
         try:
-            # olcli 原始方式：所有参数走 URL query string，仅文件走 multipart body
-            resp = self._session.post(url, params=params, files=files, timeout=30)
+            # 新版 Overleaf (Uppy)：folder_id+_csrf 在 query string，name 在 multipart body
+            resp = self._session.post(url, params=params, data=data, files=files, timeout=30)
         except requests.exceptions.ConnectionError as e:
             raise OverleafNetworkError(f"网络连接失败：{e}") from e
         except requests.exceptions.Timeout as e:
