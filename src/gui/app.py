@@ -163,16 +163,26 @@ class OverleavesApp:
         self._pdf_viewer.width = self._right_width
 
         # 可拖拽左分隔条
+        # 用 Container 替代 VerticalDivider：在 CrossAxis.STRETCH Row 里
+        # Container 无需内容也会填满行高，VerticalDivider 有时高度为 0
         self._left_divider = ft.GestureDetector(
-            content=ft.VerticalDivider(width=8),
+            content=ft.Container(
+                width=6,
+                bgcolor=ft.Colors.GREY_400,
+            ),
             mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
             on_pan_update=self._on_left_divider_drag,
+            drag_interval=16,  # 限流到 ~60fps，减少事件洪泛卡顿
         )
         # 可拖拽右分隔条
         self._right_divider = ft.GestureDetector(
-            content=ft.VerticalDivider(width=8),
+            content=ft.Container(
+                width=6,
+                bgcolor=ft.Colors.GREY_400,
+            ),
             mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
             on_pan_update=self._on_right_divider_drag,
+            drag_interval=16,
         )
 
         self._three_cols = ft.Row(
@@ -202,25 +212,32 @@ class OverleavesApp:
 
     def _on_left_divider_drag(self, e) -> None:
         """拖拽左分隔条：调整左栏宽度，中间栏自动伸缩。"""
-        # local_delta 优先（当前帧增量），fallback 到 global_delta
         _delta = e.local_delta or e.global_delta
         dx = _delta.x if _delta else 0
         if not dx:
             return
-        self._left_width = max(self._MIN_WIDTH, self._left_width + dx)
-        self._file_tree.width = self._left_width
-        self._page.update()
+        new_w = max(self._MIN_WIDTH, self._left_width + dx)
+        if new_w == self._left_width:
+            return
+        self._left_width = new_w
+        self._file_tree.width = new_w
+        # 只更新左栏控件，比 page.update() 代价低得多；
+        # Flutter Row 会自动重新计算 Expanded 中间栏的宽度
+        self._file_tree.update()
 
     def _on_right_divider_drag(self, e) -> None:
         """拖拽右分隔条：调整右栏宽度，中间栏自动伸缩。"""
-        # 向左拖（dx < 0）→ 右栏变宽；local_delta 优先，fallback 到 global_delta
+        # 向左拖（dx < 0）→ 右栏变宽
         _delta = e.local_delta or e.global_delta
         dx = _delta.x if _delta else 0
         if not dx:
             return
-        self._right_width = max(self._MIN_WIDTH, self._right_width - dx)
-        self._pdf_viewer.width = self._right_width
-        self._page.update()
+        new_w = max(self._MIN_WIDTH, self._right_width - dx)
+        if new_w == self._right_width:
+            return
+        self._right_width = new_w
+        self._pdf_viewer.width = new_w
+        self._pdf_viewer.update()
 
     def _on_toggle_left(self, _) -> None:
         """切换左栏文件树的显示/隐藏。"""
