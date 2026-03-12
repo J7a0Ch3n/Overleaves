@@ -24,6 +24,17 @@ from storage.local_storage import LocalStorage
 logger = logging.getLogger(__name__)
 
 
+def _normalize_entities(entities: list) -> list:
+    """
+    规范化 entities 列表：将 Overleaf 的 MongoDB _id 字段统一映射为 id。
+    供从本地缓存加载时使用（缓存可能是旧版本保存的，字段名不一致）。
+    """
+    for e in entities:
+        if "id" not in e and "_id" in e:
+            e["id"] = e["_id"]
+    return entities
+
+
 def _build_tree_from_entities(entities: list) -> list:
     """
     将 /entities 返回的扁平列表转换为文件树结构，供 FileTreePanel 显示。
@@ -76,7 +87,7 @@ class OverleavesApp:
         self._storage = storage
 
         self._file_tree = FileTreePanel(on_file_select=self._on_file_select)
-        self._tex_viewer = TexViewerPanel()
+        self._tex_viewer = TexViewerPanel(on_change=self._on_content_change)
         self._pdf_viewer = PdfViewerPanel()
         self._progress = ft.ProgressBar(visible=False, height=4)
 
@@ -113,6 +124,7 @@ class OverleavesApp:
         # 多项目管理
         self._current_entities: list = []  # 当前项目 entities（含 doc_id）
         self._current_doc_id: str = ""    # 当前打开文件的 doc_id，选文件时更新
+        self._modified_files: dict[str, str] = {}  # 本次会话已修改的文件 {rel_path: content}
         self._project_title = ft.Text("Overleaves", weight=ft.FontWeight.BOLD)
         self._btn_project = ft.PopupMenuButton(
             icon=ft.Icons.FOLDER_OPEN,
@@ -127,7 +139,6 @@ class OverleavesApp:
             disabled=True,
             on_click=self._on_push,
         )
-
     def build(self) -> None:
         """将整个 UI 挂载到 page。"""
         page = self._page
@@ -298,6 +309,31 @@ class OverleavesApp:
             ))
         return items
 
+    def _on_content_change(self, rel_path: str, content: str) -> None:
+        """TexViewerPanel 回调：用户每次编辑时调用，跟踪"已修改文件"集合。"""
+        prev_count = len(self._modified_files)
+        self._modified_files[rel_path] = content
+        new_count = len(self._modified_files)
+        # 只在修改文件数变化时（首次修改某文件）更新按钮，避免每次按键都触发 IPC
+        if new_count != prev_count:
+            self._btn_push.text = f"推送修改 ({new_count})"
+            self._btn_push.disabled = False
+            self._btn_push.update()
+
+    def _build_path_doc_id_map(self) -> dict[str, str]:
+        """
+        从 _current_entities 构建 rel_path → doc_id 映射。
+        兼容 id 和 _id 两种字段名；只包含 type=='doc' 的可推送文件。
+        """
+        result: dict[str, str] = {}
+        for entity in self._current_entities:
+            path = entity.get("path", "").lstrip("/")
+            doc_id = entity.get("id") or entity.get("_id", "")
+            # 只有 doc 类型才能推送；file 类型（图片/PDF等）不可编辑推送
+            if path and doc_id and entity.get("type", "doc") == "doc":
+                result[path] = doc_id
+        return result
+
     def _refresh_project_menu(self) -> None:
         """刷新项目菜单条目（切换/新建项目后调用）。"""
         self._btn_project.items = self._build_project_menu_items()
@@ -310,7 +346,7 @@ class OverleavesApp:
             return
         meta = self._storage.load_project_meta(pid)
         if meta:
-            entities = meta.get("entities", [])
+            entities = _normalize_entities(meta.get("entities", []))
             self._current_entities = entities
             tree = _build_tree_from_entities(entities)
             self._file_tree.load_tree(tree, trigger_update=False)
@@ -384,8 +420,9 @@ class OverleavesApp:
 
         meta = self._storage.load_project_meta(project_id)
         if meta:
-            entities = meta.get("entities", [])
+            entities = _normalize_entities(meta.get("entities", []))
             self._current_entities = entities
+            self._modified_files.clear()
             tree = _build_tree_from_entities(entities)
             self._file_tree.load_tree(tree)
             name = meta.get("name", project_id)
@@ -426,12 +463,13 @@ class OverleavesApp:
     async def _finish_loading_async(self) -> None:
         """
         后台线程任务完成后，通过 page.run_task() 调度到 asyncio 事件循环执行。
-        page.update() 在事件循环线程中调用才能可靠触发 Flutter 重绘。
         """
         self._progress.visible = False
         self._btn_fetch.disabled = False
         self._btn_compile.disabled = False
-        self._btn_push.disabled = (self._tex_viewer.get_current_filename() == "")
+        count = len(self._modified_files)
+        self._btn_push.text = f"推送修改 ({count})" if count else "推送修改"
+        self._btn_push.disabled = count == 0
         self._page.update()
 
     async def _finish_file_loading_async(self) -> None:
@@ -443,7 +481,9 @@ class OverleavesApp:
         self._progress.visible = False
         self._btn_fetch.disabled = False
         self._btn_compile.disabled = False
-        self._btn_push.disabled = not getattr(self, "_pending_is_text", False)
+        count = len(self._modified_files)
+        self._btn_push.text = f"推送修改 ({count})" if count else "推送修改"
+        self._btn_push.disabled = count == 0
         self._page.update()
 
     def _show_error(self, title: str, message: str) -> None:
@@ -530,6 +570,7 @@ class OverleavesApp:
                 zf.close()
                 # 保存 entities 元数据到本地，供下次免网络加载
                 self._current_entities = entities
+                self._modified_files.clear()  # 拉取后服务器版本为最新，清空本地修改记录
                 proj_name = self._settings.get_project_name(project_id)
                 self._storage.save_project_meta(project_id, entities, proj_name)
                 # 构建文件树（不触发中间 update，由 _set_loading(False) 统一刷新）
@@ -591,7 +632,7 @@ class OverleavesApp:
         threading.Thread(target=compile_task, daemon=True).start()
 
     def _on_push(self, _) -> None:
-        """推送当前编辑内容到 Overleaf 并更新本地缓存。"""
+        """推送所有本次会话已修改的文件到 Overleaf，并更新本地缓存。"""
         cookie = self._settings.current_cookie
         project_id = self._settings.project_id
         if not cookie:
@@ -601,52 +642,74 @@ class OverleavesApp:
             self._show_error("未配置项目 ID", "请先选择或创建项目")
             return
 
-        rel_path = self._tex_viewer.get_current_filename()
-        content = self._tex_viewer.get_content()
-        if not rel_path:
-            self._show_error("无打开文件", "请先从文件树选择一个文本文件")
+        if not self._modified_files:
+            self._show_error("无修改内容", "尚未修改任何文件，无需推送。")
             return
 
-        # 直接使用选文件时记录的 doc_id，无需再搜索 entities
-        doc_id = self._current_doc_id
-        if not doc_id:
+        # 构建 path→doc_id 映射（兼容 id 和 _id 字段名）
+        path_to_id = self._build_path_doc_id_map()
+
+        # 检查是否所有修改文件都能找到 doc_id
+        missing = [p for p in self._modified_files if not path_to_id.get(p)]
+        if missing:
             self._show_error(
-                "无法推送",
-                f"找不到文件 {rel_path} 的 doc_id。\n"
-                "可能原因：该文件为二进制附件（仅 doc 类型可推送），"
-                "或请重新拉取项目以刷新文件列表。"
+                "部分文件无法推送",
+                "以下文件找不到 doc_id（可能为二进制附件，不支持推送）：\n"
+                + "\n".join(missing)
+                + "\n\n如确认为文本文件，请先重新拉取项目以刷新文件列表。"
             )
             return
 
+        # 快照当前修改，避免后台线程执行期间被新修改覆盖
+        files_to_push = dict(self._modified_files)
         self._set_loading(True)
 
         def push_task():
+            success_paths: list[str] = []
+            error_msgs: list[str] = []
             try:
                 client = OverleafClient(cookie)
-                client.upload_file(project_id, doc_id, content)
-                # 同步更新本地缓存
-                self._storage.save_file(project_id, rel_path, content)
-                logger.info("推送并更新本地缓存成功：%s", rel_path)
-                # 显示成功提示
-                self._page.run_task(self._show_push_success_async)
-            except OverleafAuthError as e:
-                self._show_error("认证失败", str(e))
-            except OverleafNotFoundError as e:
-                self._show_error("推送失败", str(e))
-            except OverleafNetworkError as e:
-                self._show_error("网络错误", str(e))
             except Exception as e:
-                logger.error("推送失败：%s", e)
-                self._show_error("推送失败", str(e))
-            finally:
+                self._show_error("客户端初始化失败", str(e))
                 self._page.run_task(self._finish_loading_async)
+                return
+
+            for rel_path, content in files_to_push.items():
+                doc_id = path_to_id[rel_path]
+                try:
+                    client.upload_file(project_id, doc_id, content)
+                    self._storage.save_file(project_id, rel_path, content)
+                    success_paths.append(rel_path)
+                    logger.info("推送成功：%s (doc_id=%s)", rel_path, doc_id)
+                except Exception as e:
+                    logger.error("推送失败：%s → %s", rel_path, e)
+                    error_msgs.append(f"{rel_path}: {e}")
+
+            # 清除已成功推送的文件记录
+            for p in success_paths:
+                self._modified_files.pop(p, None)
+
+            if error_msgs:
+                self._show_error(
+                    "推送部分失败",
+                    f"成功推送 {len(success_paths)} 个文件，"
+                    f"失败 {len(error_msgs)} 个：\n" + "\n".join(error_msgs)
+                )
+            else:
+                # run_task 不能传带参数的 coroutine 对象；用闭包包装为无参 async def
+                n = len(success_paths)
+                async def _notify():
+                    await self._show_push_success_async(n)
+                self._page.run_task(_notify)
+
+            self._page.run_task(self._finish_loading_async)
 
         threading.Thread(target=push_task, daemon=True).start()
 
-    async def _show_push_success_async(self) -> None:
+    async def _show_push_success_async(self, count: int = 1) -> None:
         """在 UI 线程中显示推送成功提示。"""
         snack = ft.SnackBar(
-            content=ft.Text("推送成功！文件已上传到 Overleaf"),
+            content=ft.Text(f"推送成功！已上传 {count} 个文件到 Overleaf"),
             bgcolor=ft.Colors.GREEN_700,
         )
         self._page.overlay.append(snack)

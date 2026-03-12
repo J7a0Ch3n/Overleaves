@@ -24,11 +24,21 @@ class TexViewerPanel(ft.Column):
     - 其他：显示提示信息
     """
 
-    def __init__(self):
+    def __init__(self, on_change=None):
+        """
+        on_change: 可选回调 Callable[[filename: str, content: str], None]
+        每次用户编辑文本时触发，供外层跟踪"已修改文件"列表使用。
+        """
         super().__init__(expand=True, spacing=0, scroll=ft.ScrollMode.AUTO)
         self._current_filename: str = ""
         self._text_field: ft.TextField | None = None  # 当前可编辑文本域引用
+        self._on_change = on_change  # 外部回调
         self._show_empty()
+
+    def _handle_text_change(self, e) -> None:
+        """TextField on_change 事件转发给外部回调（每次按键触发）。"""
+        if self._on_change and self._current_filename:
+            self._on_change(self._current_filename, e.control.value or "")
 
     # ------------------------------------------------------------------
     # 公开接口
@@ -139,6 +149,7 @@ class TexViewerPanel(ft.Column):
             border=ft.InputBorder.NONE,
             text_style=ft.TextStyle(font_family="Courier New", size=13),
             bgcolor=ft.Colors.TRANSPARENT,
+            on_change=self._handle_text_change,
         )
         return ft.Container(
             content=self._text_field,

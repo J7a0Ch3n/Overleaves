@@ -125,12 +125,20 @@ class OverleafClient:
             data = resp.json()
         except Exception as e:
             raise OverleafNetworkError(f"响应解析失败：{e}") from e
-        entities = data.get("entities", [])
-        # Overleaf 使用 MongoDB ObjectId，字段名为 _id 而非 id
-        # 规范化为 id，确保后续推送逻辑可以统一使用 entity["id"]
+        # 兼容顶层为 list 或 dict{"entities":[...]} 两种格式
+        if isinstance(data, list):
+            entities = data
+        else:
+            entities = data.get("entities", [])
+        # 规范化：Overleaf 使用 MongoDB ObjectId，字段名为 _id；统一映射为 id
         for e in entities:
             if "id" not in e and "_id" in e:
                 e["id"] = e["_id"]
+        if entities:
+            logger.debug("entities sample[0] keys: %s, id=%s, path=%s",
+                         list(entities[0].keys()),
+                         entities[0].get("id", "(none)"),
+                         entities[0].get("path", "(none)"))
         logger.info("成功获取项目 %s 文件列表，共 %d 个文件", project_id, len(entities))
         return entities
 
