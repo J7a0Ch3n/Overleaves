@@ -434,15 +434,16 @@ class OverleavesApp:
         self._btn_push.disabled = (self._tex_viewer.get_current_filename() == "")
         self._page.update()
 
-    async def _finish_file_loading_async(self, is_text: bool = False) -> None:
+    async def _finish_file_loading_async(self) -> None:
         """
         文件选择加载完成后的刷新。
-        在 asyncio 线程中统一恢复所有按钮状态，用 page.update() 确保 Flutter 实际重绘。
+        run_task 只接受无参 coroutine function，is_text 通过 self._pending_is_text 传递。
+        在 asyncio 线程中统一恢复所有按钮状态，page.update() 确保 Flutter 实际重绘。
         """
         self._progress.visible = False
         self._btn_fetch.disabled = False
         self._btn_compile.disabled = False
-        self._btn_push.disabled = not is_text
+        self._btn_push.disabled = not getattr(self, "_pending_is_text", False)
         self._page.update()
 
     def _show_error(self, title: str, message: str) -> None:
@@ -481,6 +482,8 @@ class OverleavesApp:
 
         # 记录当前文件的 doc_id（从文件树节点直接取，无需再搜索 entities）
         self._current_doc_id = node.get("id", "")
+        # run_task 只能接受无参 coroutine function，通过实例变量传递 is_text
+        self._pending_is_text = is_text
 
         def load_task():
             try:
@@ -495,8 +498,8 @@ class OverleavesApp:
             except Exception as e:
                 logger.error("加载文件失败：%s", e)
             finally:
-                # 在 asyncio 线程中统一恢复按钮状态并刷新 UI
-                self._page.run_task(self._finish_file_loading_async(is_text))
+                # run_task 需要 coroutine function（不能调用后传入 coroutine 对象）
+                self._page.run_task(self._finish_file_loading_async)
 
         threading.Thread(target=load_task, daemon=True).start()
 
