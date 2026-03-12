@@ -7,13 +7,15 @@ import io
 import json as _json
 import logging
 import re
+import threading as _threading
+import time as _time
 import uuid as _uuid
 import zipfile
 from pathlib import Path
 from typing import Union
 
 import requests
-from bs4 import BeautifulSoup as _BS4
+import websocket as _websocket
 from bs4 import BeautifulSoup as _BS4
 
 from .exceptions import (
@@ -110,79 +112,167 @@ class OverleafClient:
             return m2.group(1)
         return ""
 
+    def _get_root_folder_via_socketio(self, project_id: str) -> tuple:
+        """
+        通过 Socket.IO WebSocket 调用 joinProject 事件获取 rootFolder._id 和子目录结构。
+        必须在握手 URL 中带 projectId 参数（Overleaf 要求）。
+        Returns: (root_folder_id: str, root_folders: list)
+        """
+        BASE = BASE_URL  # https://www.overleaf.com
+
+        # Step 1: Socket.IO 握手（带 projectId）
+        ts = int(_time.time() * 1000)
+        r = self._get(f"{BASE}/socket.io/1/?t={ts}&projectId={project_id}")
+        sid = r.text.split(':')[0]
+        logger.debug("socket.io session id: %s", sid)
+
+        # 合并响应 Cookie（特别是 GCLB 负载均衡 Cookie）保证后续依赖相同后端
+        orig_cookie = self._session.headers.get('Cookie', '')
+        cookie_dict = {}
+        for part in orig_cookie.split(';'):
+            part = part.strip()
+            if '=' in part:
+                k, v = part.split('=', 1)
+                cookie_dict[k.strip()] = v.strip()
+        for k, v in r.cookies.items():
+            cookie_dict[k] = v
+        combined_cookie = '; '.join(f'{k}={v}' for k, v in cookie_dict.items())
+
+        result: dict = {}
+        done = _threading.Event()
+
+        def _on_open(ws):
+            _time.sleep(0.05)
+            event = {'name': 'joinProject', 'args': [{'project_id': project_id}]}
+            try:
+                ws.send(f'5:1+::{_json.dumps(event)}')
+                logger.debug("joinProject 已发送")
+            except Exception as e:
+                logger.debug("joinProject send 失败: %s", e)
+                done.set()
+
+        def _on_message(ws, msg):
+            if msg == '2::':  # heartbeat
+                try: ws.send('2::')
+                except: pass
+                return
+            # joinProjectResponse 事件（type=5）
+            if '"joinProjectResponse"' in msg or '"rootFolder"' in msg:
+                try:
+                    # 格式: 5:::{"name":"joinProjectResponse","args":[{...}]}
+                    payload = _json.loads(msg[4:])  # 跳过 '5:::'
+                    args = payload.get('args', [])
+                    infos = args[0] if args else {}
+                    # args[0] 可能是 {publicId, project} 格式
+                    project_data = infos.get('project', infos)
+                    rf = project_data.get('rootFolder', [{}])[0]
+                    result['root_folder_id'] = rf.get('_id', '')
+                    result['root_folders'] = rf.get('folders', [])
+                    logger.debug("rootFolder._id 从 socketio 获取: %s", result['root_folder_id'])
+                except Exception as e:
+                    logger.debug("joinProjectResponse 解析失败: %s | msg[:200]=%s", e, msg[:200])
+                finally:
+                    done.set()
+                return
+            # ack 响应（type=6）
+            if msg.startswith('6:::'):
+                raw = msg[4:]
+                if '+' in raw[:5]:
+                    raw = raw.split('+', 1)[1]
+                try:
+                    data = _json.loads(raw)
+                    if isinstance(data, list) and len(data) > 1 and isinstance(data[1], dict):
+                        infos = data[1]
+                        rf = infos.get('rootFolder', [{}])[0]
+                        result['root_folder_id'] = rf.get('_id', '')
+                        result['root_folders'] = rf.get('folders', [])
+                        logger.debug("rootFolder._id 从 socketio ack: %s", result['root_folder_id'])
+                except Exception as e:
+                    logger.debug("socketio ack 解析失败: %s", e)
+                done.set()
+            elif '7:::' in msg or 'connectionRejected' in msg:
+                logger.warning("socket.io 连接被拒: %s", msg[:100])
+                done.set()
+
+        def _on_error(ws, e):
+            if not done.is_set():
+                logger.debug("socket.io ws 错误: %s", str(e)[:80])
+
+        def _on_close(ws, *a):
+            done.set()
+
+        ws_url = f"wss://www.overleaf.com/socket.io/1/websocket/{sid}"
+        ws = _websocket.WebSocketApp(
+            ws_url,
+            header={'Cookie': combined_cookie, 'User-Agent': self._session.headers.get('User-Agent', 'Mozilla/5.0')},
+            on_open=_on_open, on_message=_on_message,
+            on_error=_on_error, on_close=_on_close)
+        t = _threading.Thread(target=lambda: ws.run_forever(ping_interval=0), daemon=True)
+        t.start()
+        done.wait(timeout=12)
+        try: ws.close()
+        except: pass
+
+        root_folder_id = result.get('root_folder_id', '')
+        root_folders = result.get('root_folders', [])
+        if not root_folder_id:
+            logger.warning("socket.io joinProject 未能获取 rootFolder._id")
+        return root_folder_id, root_folders
+
     def _get_project_meta(self, project_id: str) -> tuple:
         """
         提取上传所需的 CSRF token 和 rootFolder._id。
-        - CSRF 优先从仪表板页 /project 取（与 olcli 一致），fallback 编辑器页
-        - rootFolder 从编辑器页 HTML 中解析
+        - CSRF 从仪表板页 /project 取
+        - rootFolder 通过 Socket.IO joinProject 获取（最可靠），HTML fallback
         Returns: (csrf: str, root_folder_id: str, root_folders: list)
         """
-        # 同时获取两页：仪表板（CSRF 来源）+ 编辑器（rootFolder 来源）
+        # ① CSRF — BS4 解析 meta[name=ol-csrfToken]
         resp_dashboard = self._get(f"{BASE_URL}/project")
         resp_editor = self._get(f"{BASE_URL}/project/{project_id}")
         text = resp_editor.text
 
-        # ① CSRF — BS4 解析 meta[name=ol-csrfToken]（与 olcli 完全一致的方式）
         csrf = ""
         for _src in [resp_dashboard.text, resp_editor.text]:
             _tag = _BS4(_src, "html.parser").find("meta", {"name": "ol-csrfToken"})
             if _tag and _tag.get("content"):
                 csrf = _tag["content"]
-                logger.debug("CSRF 提取成功（%s）: %s...",
-                             "dashboard" if _src is resp_dashboard.text else "editor",
-                             csrf[:12])
+                logger.debug("CSRF 提取成功: %s...", csrf[:12])
                 break
         if not csrf:
-            # regex 兜底：csrfToken 嵌在 JS 变量里
             m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', text)
             if m:
                 csrf = m.group(1)
         if not csrf:
             logger.warning("CSRF token 未找到，推送可能失败")
 
-        # ② rootFolder._id — BS4 解析 meta[name=ol-rootFolder]（与 olcli 完全一致的方式）
+        # ② rootFolder._id — 优先 Socket.IO joinProject，HTML 兜底
         root_folder_id = ""
         root_folders: list = []
 
-        _rf_tag = _BS4(text, "html.parser").find("meta", {"name": "ol-rootFolder"})
-        if _rf_tag and _rf_tag.get("content"):
-            try:
-                root = _json.loads(_html.unescape(_rf_tag["content"]))
-                if isinstance(root, list) and root:
-                    root_folder_id = root[0].get("_id", "")
-                    root_folders = root[0].get("folders", [])
-                    logger.debug("rootFolder._id 从 meta[ol-rootFolder] 提取: %s", root_folder_id)
-            except Exception as e:
-                logger.debug("ol-rootFolder JSON 解析失败: %s", e)
+        # 主路径：Socket.IO，100% 可靠（Overleaf 官方客户端也用这种方式）
+        try:
+            root_folder_id, root_folders = self._get_root_folder_via_socketio(project_id)
+        except Exception as e:
+            logger.debug("socket.io 获取 rootFolder 失败: %s", e)
 
-        # 方案 B：逐个 <script> 块搜索 rootFolder JSON（Overleaf 新版将数据嵌入 JS）
+        # HTML 兜底（旧版 Overleaf 仍把 rootFolder 放在 meta 标签里）
         if not root_folder_id:
-            for script_content in re.findall(r'<script[^>]*>([\s\S]*?)</script>', text):
-                if "rootFolder" not in script_content:
-                    continue
-                # 只取 _id 即可满足需求（文件夹树嵌套太深，简单正则不可靠）
-                mid = re.search(
-                    r'"rootFolder"\s*:\s*\[\s*\{\s*"_id"\s*:\s*"([a-f0-9]{24})"', script_content)
-                if mid:
-                    root_folder_id = mid.group(1)
-                    logger.debug("rootFolder._id 从 script 块提取: %s", root_folder_id)
-                    break
-
-        # 方案 C：全文最后兜底
-        if not root_folder_id:
-            m = re.search(r'"rootFolder"\s*:\s*\[\s*\{\s*"_id"\s*:\s*"([a-f0-9]{24})"', text)
-            if m:
-                root_folder_id = m.group(1)
-                logger.debug("rootFolder._id 全文兜底提取: %s", root_folder_id)
+            _rf_tag = _BS4(text, "html.parser").find("meta", {"name": "ol-rootFolder"})
+            if _rf_tag and _rf_tag.get("content"):
+                try:
+                    root = _json.loads(_html.unescape(_rf_tag["content"]))
+                    if isinstance(root, list) and root:
+                        root_folder_id = root[0].get("_id", "")
+                        root_folders = root[0].get("folders", [])
+                except Exception as e:
+                    logger.debug("ol-rootFolder meta 解析失败: %s", e)
 
         if not root_folder_id:
-            logger.warning(
-                "无法从页面提取 rootFolder._id，以 project_id 作为 folder_id fallback。"
-                "建议运行 python debug_upload.py <project_id> 查看页面格式")
+            logger.warning("无法获取 rootFolder._id，以 project_id 作为 fallback")
             root_folder_id = project_id
 
-        logger.debug("project_meta 完成: csrf=%s, root_folder_id=%s, subfolders=%d",
-                     csrf[:8] if csrf else "NONE", root_folder_id, len(root_folders))
+        logger.debug("project_meta: csrf=%s, root_folder_id=%s",
+                     csrf[:8] if csrf else "NONE", root_folder_id)
         return csrf, root_folder_id, root_folders
 
     def _find_folder_id(self, parent_parts: list, root_folder_id: str, root_folders: list) -> str:
