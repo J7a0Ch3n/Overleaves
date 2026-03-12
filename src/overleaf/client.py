@@ -2,6 +2,7 @@
 Overleaf HTTP 客户端：基于 Cookie 的非官方 API 接入
 当前适配新版 Overleaf：使用 /entities 获取文件列表，/download/zip 批量下载
 """
+import html as _html
 import io
 import json as _json
 import logging
@@ -131,30 +132,38 @@ class OverleafClient:
         root_folder_id = ""
         root_folders: list = []
 
-        # 方案 A：<meta name="ol-rootFolder" content='[...]'>
-        m = re.search(r'<meta\b[^>]+\bname=["\']ol-rootFolder["\'][^>]+\bcontent=\'([^\']+)\'', text)
-        if not m:
-            m = re.search(r'<meta\b[^>]+\bcontent=\'([^\']+)\'[^>]+\bname=["\']ol-rootFolder["\']', text)
-        if m:
+        def _try_parse_root(json_str: str) -> bool:
+            nonlocal root_folder_id, root_folders
             try:
-                root = _json.loads(m.group(1))
-                root_folder_id = root[0].get("_id", "")
-                root_folders = root[0].get("folders", [])
+                root = _json.loads(json_str)
+                if isinstance(root, list) and root:
+                    _id = root[0].get("_id", "")
+                    if _id:
+                        root_folder_id = _id
+                        root_folders = root[0].get("folders", [])
+                        return True
             except Exception as e:
-                logger.debug("解析 ol-rootFolder meta 失败: %s", e)
+                logger.debug("解析 rootFolder JSON 失败: %s | str=%s", e, json_str[:80])
+            return False
 
-        # 方案 B：JSON blob 中的 rootFolder 字段（Overleaf 将项目数据嵌入 script 中）
+        # 方案 A：<meta name="ol-rootFolder" ...> 提取 content（两步法，兼容属性顺序）
+        meta_m = re.search(r'<meta\b[^>]*\bname=["\']ol-rootFolder["\'][^>]*>', text)
+        if meta_m:
+            content_m = re.search(r'\bcontent=(["\'])([\s\S]*?)\1', meta_m.group(0))
+            if content_m:
+                # 现代 Overleaf 对 content 内 JSON 做 HTML entity 编码
+                _try_parse_root(_html.unescape(content_m.group(2)))
+
+        # 方案 B：script 标签内的 JSON blob（Overleaf 将完整项目数据嵌入页面）
         if not root_folder_id:
-            m = re.search(r'"rootFolder"\s*:\s*(\[.*?\])\s*[,}]', text, re.DOTALL)
-            if m:
-                try:
-                    root = _json.loads(m.group(1))
-                    root_folder_id = root[0].get("_id", "")
-                    root_folders = root[0].get("folders", [])
-                except Exception as e:
-                    logger.debug("解析 rootFolder JSON blob 失败: %s", e)
+            # 找所有 <script> 内容，逐个搜寻 "rootFolder":[...
+            for script_content in re.findall(r'<script[^>]*>([\s\S]*?)</script>', text):
+                m = re.search(r'"rootFolder"\s*:\s*(\[(?:[^\[\]]*|\[[^\[\]]*\])*\])', script_content)
+                if m:
+                    if _try_parse_root(m.group(1)):
+                        break
 
-        # 方案 C：只提取 _id 字段本身（最低限度）
+        # 方案 C：全文正则直接抓 _id 字段（最低限度兜底，不含子目录结构）
         if not root_folder_id:
             m = re.search(r'"rootFolder"\s*:\s*\[\s*\{\s*"_id"\s*:\s*"([a-f0-9]{24})"', text)
             if m:
@@ -359,8 +368,9 @@ class OverleafClient:
         files = {"qqfile": (file_name, io.BytesIO(file_bytes), "text/plain")}
 
         url = f"{BASE_URL}/project/{project_id}/upload"
+        logger.debug("upload: folder_id=%s, file=%s, size=%d", folder_id, file_name, len(file_bytes))
         try:
-            resp = self._session.post(url, params=params, files=files, timeout=30)
+            resp = self._session.post(url, data=params, files=files, timeout=30)
         except requests.exceptions.ConnectionError as e:
             raise OverleafNetworkError(f"网络连接失败：{e}") from e
         except requests.exceptions.Timeout as e:
