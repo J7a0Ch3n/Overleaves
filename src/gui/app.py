@@ -161,12 +161,16 @@ class OverleavesApp:
         self._left_wrap = ft.Container(
             content=self._file_tree,
             width=self._left_width,
-            clip_behavior=ft.ClipBehavior.HARD_EDGE,  # 防止缩窄时内容溢出
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            # Flutter 端在两次 Python update() 之间自动插值，达到显示刷新率级别的丝滑度
+            # duration 设为与 drag_interval 相同（都是 30ms）
+            animate=ft.Animation(30, ft.AnimationCurve.LINEAR),
         )
         self._right_wrap = ft.Container(
             content=self._pdf_viewer,
             width=self._right_width,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            animate=ft.Animation(30, ft.AnimationCurve.LINEAR),
         )
 
         # 可拖拽左分隔条：Container 在 STRETCH Row 中无条件撑满行高
@@ -174,14 +178,15 @@ class OverleavesApp:
             content=ft.Container(width=6, bgcolor=ft.Colors.GREY_400),
             mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
             on_pan_update=self._on_left_divider_drag,
-            drag_interval=8,  # ~120fps：事件更密集但每次只发一个数字，比16ms更丝滑
+            # Python 每 30ms 发一次目标宽度，Flutter 动画补帧到 60fps+
+            drag_interval=30,
         )
         # 可拖拽右分隔条
         self._right_divider = ft.GestureDetector(
             content=ft.Container(width=6, bgcolor=ft.Colors.GREY_400),
             mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
             on_pan_update=self._on_right_divider_drag,
-            drag_interval=8,
+            drag_interval=30,
         )
 
         self._three_cols = ft.Row(
