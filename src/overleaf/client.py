@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Union
 
 import requests
+from bs4 import BeautifulSoup as _BS4
+from bs4 import BeautifulSoup as _BS4
 
 from .exceptions import (
     OverleafAuthError,
@@ -110,70 +112,76 @@ class OverleafClient:
 
     def _get_project_meta(self, project_id: str) -> tuple:
         """
-        从项目编辑器页面（一次 GET）提取：
-          - csrf: CSRF token
-          - root_folder_id: 根文件夹 _id（与 olcli 上传 api 所需的 folder_id 一致）
-          - root_folders: 根文件夹下的子文件夹列表（用于路径导航）
-        不依赖 Socket.IO，直接解析 HTML。
+        提取上传所需的 CSRF token 和 rootFolder._id。
+        - CSRF 优先从仪表板页 /project 取（与 olcli 一致），fallback 编辑器页
+        - rootFolder 从编辑器页 HTML 中解析
         Returns: (csrf: str, root_folder_id: str, root_folders: list)
         """
-        resp = self._get(f"{BASE_URL}/project/{project_id}")
-        text = resp.text
+        # 同时获取两页：仪表板（CSRF 来源）+ 编辑器（rootFolder 来源）
+        resp_dashboard = self._get(f"{BASE_URL}/project")
+        resp_editor = self._get(f"{BASE_URL}/project/{project_id}")
+        text = resp_editor.text
 
-        # ① CSRF
+        # ① CSRF — BS4 解析 meta[name=ol-csrfToken]（与 olcli 完全一致的方式）
         csrf = ""
-        m = re.search(r'<meta[^>]+name=["\']ol-csrfToken["\']\s+content=["\']([^"\']+)', text)
-        if not m:
+        for _src in [resp_dashboard.text, resp_editor.text]:
+            _tag = _BS4(_src, "html.parser").find("meta", {"name": "ol-csrfToken"})
+            if _tag and _tag.get("content"):
+                csrf = _tag["content"]
+                logger.debug("CSRF 提取成功（%s）: %s...",
+                             "dashboard" if _src is resp_dashboard.text else "editor",
+                             csrf[:12])
+                break
+        if not csrf:
+            # regex 兜底：csrfToken 嵌在 JS 变量里
             m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', text)
-        if m:
-            csrf = m.group(1)
+            if m:
+                csrf = m.group(1)
+        if not csrf:
+            logger.warning("CSRF token 未找到，推送可能失败")
 
-        # ② Root folder ID + 子文件夹列表
+        # ② rootFolder._id — BS4 解析 meta[name=ol-rootFolder]（与 olcli 完全一致的方式）
         root_folder_id = ""
         root_folders: list = []
 
-        def _try_parse_root(json_str: str) -> bool:
-            nonlocal root_folder_id, root_folders
+        _rf_tag = _BS4(text, "html.parser").find("meta", {"name": "ol-rootFolder"})
+        if _rf_tag and _rf_tag.get("content"):
             try:
-                root = _json.loads(json_str)
+                root = _json.loads(_html.unescape(_rf_tag["content"]))
                 if isinstance(root, list) and root:
-                    _id = root[0].get("_id", "")
-                    if _id:
-                        root_folder_id = _id
-                        root_folders = root[0].get("folders", [])
-                        return True
+                    root_folder_id = root[0].get("_id", "")
+                    root_folders = root[0].get("folders", [])
+                    logger.debug("rootFolder._id 从 meta[ol-rootFolder] 提取: %s", root_folder_id)
             except Exception as e:
-                logger.debug("解析 rootFolder JSON 失败: %s | str=%s", e, json_str[:80])
-            return False
+                logger.debug("ol-rootFolder JSON 解析失败: %s", e)
 
-        # 方案 A：<meta name="ol-rootFolder" ...> 提取 content（两步法，兼容属性顺序）
-        meta_m = re.search(r'<meta\b[^>]*\bname=["\']ol-rootFolder["\'][^>]*>', text)
-        if meta_m:
-            content_m = re.search(r'\bcontent=(["\'])([\s\S]*?)\1', meta_m.group(0))
-            if content_m:
-                # 现代 Overleaf 对 content 内 JSON 做 HTML entity 编码
-                _try_parse_root(_html.unescape(content_m.group(2)))
-
-        # 方案 B：script 标签内的 JSON blob（Overleaf 将完整项目数据嵌入页面）
+        # 方案 B：逐个 <script> 块搜索 rootFolder JSON（Overleaf 新版将数据嵌入 JS）
         if not root_folder_id:
-            # 找所有 <script> 内容，逐个搜寻 "rootFolder":[...
             for script_content in re.findall(r'<script[^>]*>([\s\S]*?)</script>', text):
-                m = re.search(r'"rootFolder"\s*:\s*(\[(?:[^\[\]]*|\[[^\[\]]*\])*\])', script_content)
-                if m:
-                    if _try_parse_root(m.group(1)):
-                        break
+                if "rootFolder" not in script_content:
+                    continue
+                # 只取 _id 即可满足需求（文件夹树嵌套太深，简单正则不可靠）
+                mid = re.search(
+                    r'"rootFolder"\s*:\s*\[\s*\{\s*"_id"\s*:\s*"([a-f0-9]{24})"', script_content)
+                if mid:
+                    root_folder_id = mid.group(1)
+                    logger.debug("rootFolder._id 从 script 块提取: %s", root_folder_id)
+                    break
 
-        # 方案 C：全文正则直接抓 _id 字段（最低限度兜底，不含子目录结构）
+        # 方案 C：全文最后兜底
         if not root_folder_id:
             m = re.search(r'"rootFolder"\s*:\s*\[\s*\{\s*"_id"\s*:\s*"([a-f0-9]{24})"', text)
             if m:
                 root_folder_id = m.group(1)
+                logger.debug("rootFolder._id 全文兜底提取: %s", root_folder_id)
 
         if not root_folder_id:
-            logger.warning("无法从页面提取 rootFolder._id，以 project_id 作为 folder_id fallback")
+            logger.warning(
+                "无法从页面提取 rootFolder._id，以 project_id 作为 folder_id fallback。"
+                "建议运行 python debug_upload.py <project_id> 查看页面格式")
             root_folder_id = project_id
 
-        logger.debug("project_meta: csrf=%s..., root_folder_id=%s, subfolders=%d",
+        logger.debug("project_meta 完成: csrf=%s, root_folder_id=%s, subfolders=%d",
                      csrf[:8] if csrf else "NONE", root_folder_id, len(root_folders))
         return csrf, root_folder_id, root_folders
 
@@ -370,7 +378,8 @@ class OverleafClient:
         url = f"{BASE_URL}/project/{project_id}/upload"
         logger.debug("upload: folder_id=%s, file=%s, size=%d", folder_id, file_name, len(file_bytes))
         try:
-            resp = self._session.post(url, data=params, files=files, timeout=30)
+            # olcli 原始方式：所有参数走 URL query string，仅文件走 multipart body
+            resp = self._session.post(url, params=params, files=files, timeout=30)
         except requests.exceptions.ConnectionError as e:
             raise OverleafNetworkError(f"网络连接失败：{e}") from e
         except requests.exceptions.Timeout as e:
