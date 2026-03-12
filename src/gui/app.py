@@ -646,19 +646,8 @@ class OverleavesApp:
             self._show_error("无修改内容", "尚未修改任何文件，无需推送。")
             return
 
-        # 构建 path→doc_id 映射（兼容 id 和 _id 字段名）
+        # 构建 path→doc_id 映射（供参考；multipart 上传不强依赖 doc_id）
         path_to_id = self._build_path_doc_id_map()
-
-        # 检查是否所有修改文件都能找到 doc_id
-        missing = [p for p in self._modified_files if not path_to_id.get(p)]
-        if missing:
-            self._show_error(
-                "部分文件无法推送",
-                "以下文件找不到 doc_id（可能为二进制附件，不支持推送）：\n"
-                + "\n".join(missing)
-                + "\n\n如确认为文本文件，请先重新拉取项目以刷新文件列表。"
-            )
-            return
 
         # 快照当前修改，避免后台线程执行期间被新修改覆盖
         files_to_push = dict(self._modified_files)
@@ -675,9 +664,9 @@ class OverleavesApp:
                 return
 
             for rel_path, content in files_to_push.items():
-                doc_id = path_to_id[rel_path]
+                doc_id = path_to_id.get(rel_path, "")
                 try:
-                    client.upload_file(project_id, doc_id, content)
+                    client.upload_file(project_id, doc_id, content, rel_path=rel_path)
                     self._storage.save_file(project_id, rel_path, content)
                     success_paths.append(rel_path)
                     logger.info("推送成功：%s (doc_id=%s)", rel_path, doc_id)
