@@ -152,46 +152,45 @@ class OverleavesApp:
         # 若已有活跃项目，启动时自动加载本地缓存文件树
         self._auto_load_cached_project()
 
-        # 左栏：显式宽度，可拖拽/折叠
-        # 必须将 expand 清为 False，否则 Row 布局会忽略显式 width（expand 优先）
-        self._file_tree.expand = False
-        self._file_tree.width = self._left_width
-        # 中间栏：始终 expand 填充剩余空间
+        # 中间栏始终 expand 填充剩余空间；左右栏用 Container wrapper 控制宽度。
+        # 拖拽时只更新 wrapper 的 width 属性（单个数字），比更新整棵控件树快得多。
         self._tex_viewer.expand = True
-        # 右栏：显式宽度，可拖拽/折叠
-        self._pdf_viewer.expand = False
-        self._pdf_viewer.width = self._right_width
+        self._file_tree.expand = True   # 让面板填充 wrapper 内部
+        self._pdf_viewer.expand = True
 
-        # 可拖拽左分隔条
-        # 用 Container 替代 VerticalDivider：在 CrossAxis.STRETCH Row 里
-        # Container 无需内容也会填满行高，VerticalDivider 有时高度为 0
+        self._left_wrap = ft.Container(
+            content=self._file_tree,
+            width=self._left_width,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,  # 防止缩窄时内容溢出
+        )
+        self._right_wrap = ft.Container(
+            content=self._pdf_viewer,
+            width=self._right_width,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        )
+
+        # 可拖拽左分隔条：Container 在 STRETCH Row 中无条件撑满行高
         self._left_divider = ft.GestureDetector(
-            content=ft.Container(
-                width=6,
-                bgcolor=ft.Colors.GREY_400,
-            ),
+            content=ft.Container(width=6, bgcolor=ft.Colors.GREY_400),
             mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
             on_pan_update=self._on_left_divider_drag,
-            drag_interval=16,  # 限流到 ~60fps，减少事件洪泛卡顿
+            drag_interval=8,  # ~120fps：事件更密集但每次只发一个数字，比16ms更丝滑
         )
         # 可拖拽右分隔条
         self._right_divider = ft.GestureDetector(
-            content=ft.Container(
-                width=6,
-                bgcolor=ft.Colors.GREY_400,
-            ),
+            content=ft.Container(width=6, bgcolor=ft.Colors.GREY_400),
             mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
             on_pan_update=self._on_right_divider_drag,
-            drag_interval=16,
+            drag_interval=8,
         )
 
         self._three_cols = ft.Row(
             controls=[
-                self._file_tree,
+                self._left_wrap,
                 self._left_divider,
                 self._tex_viewer,
                 self._right_divider,
-                self._pdf_viewer,
+                self._right_wrap,
             ],
             expand=True,
             spacing=0,
@@ -211,7 +210,7 @@ class OverleavesApp:
     # ------------------------------------------------------------------
 
     def _on_left_divider_drag(self, e) -> None:
-        """拖拽左分隔条：调整左栏宽度，中间栏自动伸缩。"""
+        """拖拽左分隔条：只更新 wrapper Container 的 width（单属性，最小序列化）。"""
         _delta = e.local_delta or e.global_delta
         dx = _delta.x if _delta else 0
         if not dx:
@@ -220,14 +219,11 @@ class OverleavesApp:
         if new_w == self._left_width:
             return
         self._left_width = new_w
-        self._file_tree.width = new_w
-        # 只更新左栏控件，比 page.update() 代价低得多；
-        # Flutter Row 会自动重新计算 Expanded 中间栏的宽度
-        self._file_tree.update()
+        self._left_wrap.width = new_w
+        self._left_wrap.update()  # 只序列化 Container.width 一个字段
 
     def _on_right_divider_drag(self, e) -> None:
-        """拖拽右分隔条：调整右栏宽度，中间栏自动伸缩。"""
-        # 向左拖（dx < 0）→ 右栏变宽
+        """拖拽右分隔条：只更新 wrapper Container 的 width（单属性，最小序列化）。"""
         _delta = e.local_delta or e.global_delta
         dx = _delta.x if _delta else 0
         if not dx:
@@ -236,13 +232,13 @@ class OverleavesApp:
         if new_w == self._right_width:
             return
         self._right_width = new_w
-        self._pdf_viewer.width = new_w
-        self._pdf_viewer.update()
+        self._right_wrap.width = new_w
+        self._right_wrap.update()
 
     def _on_toggle_left(self, _) -> None:
         """切换左栏文件树的显示/隐藏。"""
         self._left_visible = not self._left_visible
-        self._file_tree.visible = self._left_visible
+        self._left_wrap.visible = self._left_visible
         self._left_divider.visible = self._left_visible
         self._btn_toggle_left.icon = (
             ft.Icons.CHEVRON_RIGHT if not self._left_visible else ft.Icons.CHEVRON_LEFT
@@ -252,7 +248,7 @@ class OverleavesApp:
     def _on_toggle_right(self, _) -> None:
         """切换右栏 PDF 预览的显示/隐藏。"""
         self._right_visible = not self._right_visible
-        self._pdf_viewer.visible = self._right_visible
+        self._right_wrap.visible = self._right_visible
         self._right_divider.visible = self._right_visible
         self._btn_toggle_right.icon = (
             ft.Icons.CHEVRON_LEFT if not self._right_visible else ft.Icons.CHEVRON_RIGHT
