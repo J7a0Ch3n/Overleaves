@@ -112,6 +112,7 @@ class OverleavesApp:
 
         # 多项目管理
         self._current_entities: list = []  # 当前项目 entities（含 doc_id）
+        self._current_doc_id: str = ""    # 当前打开文件的 doc_id，选文件时更新
         self._project_title = ft.Text("Overleaves", weight=ft.FontWeight.BOLD)
         self._btn_project = ft.PopupMenuButton(
             icon=ft.Icons.FOLDER_OPEN,
@@ -433,16 +434,16 @@ class OverleavesApp:
         self._btn_push.disabled = (self._tex_viewer.get_current_filename() == "")
         self._page.update()
 
-    async def _finish_file_loading_async(self) -> None:
+    async def _finish_file_loading_async(self, is_text: bool = False) -> None:
         """
-        文件选择加载完成后的刷新：只更新进度条和中间栏，不触发整页重绘，
-        避免文件树和 PDF 预览区闪烁。
+        文件选择加载完成后的刷新。
+        在 asyncio 线程中统一恢复所有按钮状态，用 page.update() 确保 Flutter 实际重绘。
         """
         self._progress.visible = False
         self._btn_fetch.disabled = False
         self._btn_compile.disabled = False
-        self._progress.update()
-        self._tex_viewer.update()
+        self._btn_push.disabled = not is_text
+        self._page.update()
 
     def _show_error(self, title: str, message: str) -> None:
         dlg = ft.AlertDialog(
@@ -478,6 +479,9 @@ class OverleavesApp:
         # 在主线程立即显示加载状态，确保 UI 响应及时
         self._set_loading(True)
 
+        # 记录当前文件的 doc_id（从文件树节点直接取，无需再搜索 entities）
+        self._current_doc_id = node.get("id", "")
+
         def load_task():
             try:
                 content = self._storage.read_file(project_id, rel_path)
@@ -491,9 +495,8 @@ class OverleavesApp:
             except Exception as e:
                 logger.error("加载文件失败：%s", e)
             finally:
-                # 局部刷新：只更新进度条和中间栏，不触发整页重绘
-                self._btn_push.disabled = not is_text
-                self._page.run_task(self._finish_file_loading_async)
+                # 在 asyncio 线程中统一恢复按钮状态并刷新 UI
+                self._page.run_task(self._finish_file_loading_async(is_text))
 
         threading.Thread(target=load_task, daemon=True).start()
 
@@ -601,18 +604,14 @@ class OverleavesApp:
             self._show_error("无打开文件", "请先从文件树选择一个文本文件")
             return
 
-        # 从缓存的 entities 中查找 doc_id
-        doc_id = ""
-        for entity in self._current_entities:
-            epath = entity.get("path", "").lstrip("/")
-            if epath == rel_path:
-                doc_id = entity.get("id", "")
-                break
-
+        # 直接使用选文件时记录的 doc_id，无需再搜索 entities
+        doc_id = self._current_doc_id
         if not doc_id:
             self._show_error(
                 "无法推送",
-                f"找不到文件 {rel_path} 的 doc_id，请先拉取项目以刷新文件列表。"
+                f"找不到文件 {rel_path} 的 doc_id。\n"
+                "可能原因：该文件为二进制附件（仅 doc 类型可推送），"
+                "或请重新拉取项目以刷新文件列表。"
             )
             return
 
