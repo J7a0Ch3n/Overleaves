@@ -63,6 +63,43 @@
         },
         "from": true,
         "logger": true,
-        "\\'\\'\\')": true
+        "\\'\\'\\')": true,
+        "New-Item": true,
+        "Out-Null": true,
+        "/^python -c \"import ast, sys; files = \\['src/config/settings_manager\\.py','src/storage/local_storage\\.py','src/overleaf/client\\.py','src/gui/panels/tex_viewer\\.py','src/gui/app\\.py'\\]; \\[print\\(f'OK: \\{f\\}'\\) if ast\\.parse\\(open\\(f,encoding='utf-8'\\)\\.read\\(\\)\\) else None for f in files\\]\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "git config": true,
+        "git add": true,
+        "git commit": true,
+        "/^python -c \"import flet; print\\(flet\\.version\\.version\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import flet; print\\(flet\\.__version__\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import flet as ft; help\\(ft\\.PopupMenuItem\\.__init__\\)\" 2>&1 \\| Select-Object -First 20$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import flet as ft; help\\(ft\\.PopupMenuButton\\.__init__\\)\" 2>&1 \\| Select-Object -First 10$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import flet as ft; help\\(ft\\.GestureDetector\\.__init__\\)\" 2>&1 \\| Select-Object -First 8$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"from flet\\.controls\\.events import DragUpdateEvent; print\\(\\[a for a in dir\\(DragUpdateEvent\\) if not a\\.startswith\\('_'\\)\\]\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"from flet\\.controls\\.events import DragUpdateEvent; import inspect; print\\(inspect\\.getsource\\(DragUpdateEvent\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

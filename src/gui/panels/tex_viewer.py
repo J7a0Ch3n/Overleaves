@@ -1,5 +1,5 @@
 """
-中间文件查看面板：支持 TeX/文本文件只读展示，以及 PNG/JPG/PDF 图片预览
+中间文件查看/编辑面板：支持 TeX/文本文件可编辑展示，以及 PNG/JPG/PDF 图片预览
 """
 import logging
 from pathlib import Path
@@ -17,21 +17,42 @@ _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"}
 
 class TexViewerPanel(ft.Column):
     """
-    中间文件查看面板。
-    - 文本文件（.tex/.bib 等）：等宽字体只读 TextField
+    中间文件查看/编辑面板。
+    - 文本文件（.tex/.bib 等）：等宽字体可编辑 TextField
     - 图片文件（.png/.jpg 等）：ft.Image 展示
     - PDF 文件：用 PyMuPDF 渲染所有页面为图片展示
     - 其他：显示提示信息
     """
 
-    def __init__(self):
+    def __init__(self, on_change=None):
+        """
+        on_change: 可选回调 Callable[[filename: str, content: str], None]
+        每次用户编辑文本时触发，供外层跟踪"已修改文件"列表使用。
+        """
         super().__init__(expand=True, spacing=0, scroll=ft.ScrollMode.AUTO)
         self._current_filename: str = ""
+        self._text_field: ft.TextField | None = None  # 当前可编辑文本域引用
+        self._on_change = on_change  # 外部回调
         self._show_empty()
+
+    def _handle_text_change(self, e) -> None:
+        """TextField on_change 事件转发给外部回调（每次按键触发）。"""
+        if self._on_change and self._current_filename:
+            self._on_change(self._current_filename, e.control.value or "")
 
     # ------------------------------------------------------------------
     # 公开接口
     # ------------------------------------------------------------------
+
+    def get_content(self) -> str:
+        """获取当前编辑区域的文本内容；非文本文件或无文件时返回空字符串。"""
+        if self._text_field is not None:
+            return self._text_field.value or ""
+        return ""
+
+    def get_current_filename(self) -> str:
+        """获取当前加载的文件名（相对路径）。"""
+        return self._current_filename
 
     def load_file(self, filename: str, content, *, trigger_update: bool = True) -> None:
         """
@@ -41,6 +62,7 @@ class TexViewerPanel(ft.Column):
         由调用方统一执行 page.update()（避免后台线程连续触发两次更新丢失）。
         """
         self._current_filename = filename
+        self._text_field = None  # 重置文本域引用
         ext = Path(filename).suffix.lower()
 
         self.controls = [self._make_title_bar(filename)]
@@ -118,17 +140,19 @@ class TexViewerPanel(ft.Column):
         MAX_CHARS = 100_000
         if len(content) > MAX_CHARS:
             content = content[:MAX_CHARS] + f"\n\n... （文件过大，仅显示前 {MAX_CHARS} 字符）"
+        self._text_field = ft.TextField(
+            value=content,
+            read_only=False,
+            multiline=True,
+            min_lines=1,
+            expand=True,
+            border=ft.InputBorder.NONE,
+            text_style=ft.TextStyle(font_family="Courier New", size=13),
+            bgcolor=ft.Colors.TRANSPARENT,
+            on_change=self._handle_text_change,
+        )
         return ft.Container(
-            content=ft.TextField(
-                value=content,
-                read_only=True,
-                multiline=True,
-                min_lines=1,
-                expand=True,
-                border=ft.InputBorder.NONE,
-                text_style=ft.TextStyle(font_family="Courier New", size=13),
-                bgcolor=ft.Colors.TRANSPARENT,
-            ),
+            content=self._text_field,
             expand=True,
             padding=ft.padding.symmetric(horizontal=8, vertical=4),
         )
