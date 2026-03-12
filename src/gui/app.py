@@ -153,10 +153,13 @@ class OverleavesApp:
         self._auto_load_cached_project()
 
         # 左栏：显式宽度，可拖拽/折叠
+        # 必须将 expand 清为 False，否则 Row 布局会忽略显式 width（expand 优先）
+        self._file_tree.expand = False
         self._file_tree.width = self._left_width
         # 中间栏：始终 expand 填充剩余空间
         self._tex_viewer.expand = True
         # 右栏：显式宽度，可拖拽/折叠
+        self._pdf_viewer.expand = False
         self._pdf_viewer.width = self._right_width
 
         # 可拖拽左分隔条
@@ -199,15 +202,22 @@ class OverleavesApp:
 
     def _on_left_divider_drag(self, e) -> None:
         """拖拽左分隔条：调整左栏宽度，中间栏自动伸缩。"""
-        dx = e.local_delta.x if e.local_delta else 0
+        # local_delta 优先（当前帧增量），fallback 到 global_delta
+        _delta = e.local_delta or e.global_delta
+        dx = _delta.x if _delta else 0
+        if not dx:
+            return
         self._left_width = max(self._MIN_WIDTH, self._left_width + dx)
         self._file_tree.width = self._left_width
         self._page.update()
 
     def _on_right_divider_drag(self, e) -> None:
         """拖拽右分隔条：调整右栏宽度，中间栏自动伸缩。"""
-        # 向左拖（dx < 0）→ 右栏变宽
-        dx = e.local_delta.x if e.local_delta else 0
+        # 向左拖（dx < 0）→ 右栏变宽；local_delta 优先，fallback 到 global_delta
+        _delta = e.local_delta or e.global_delta
+        dx = _delta.x if _delta else 0
+        if not dx:
+            return
         self._right_width = max(self._MIN_WIDTH, self._right_width - dx)
         self._pdf_viewer.width = self._right_width
         self._page.update()
